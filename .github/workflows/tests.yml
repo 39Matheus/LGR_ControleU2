@@ -11,8 +11,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: |
+      - name: Install dependencies
+        run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest
-      - run: pytest -q
+      - name: Compile Python sources
+        run: python -m compileall -q app.py calculations.py core ui reports tests
+      - name: Run tests
+        run: pytest -q
