@@ -28,8 +28,9 @@ A saída de projeto foi organizada para reprodução manual:
 4. obter Kc pela condição de módulo;
 5. converter para Kp/Ki/Kd;
 6. conferir polos de malha fechada e resposta temporal;
-7. em especificações por desigualdade, fazer ajuste fino automático se a planta
-   completa não satisfizer a aproximação de 2ª ordem.
+7. opcionalmente, em especificações por desigualdade, aplicar ajuste fino após
+   o projeto de fronteira. Esse recurso fica desativado por padrão para manter
+   a resolução alinhada ao cálculo manual de prova.
 
 Internamente atan2 é usado somente para escolher corretamente o quadrante; a
 apresentação ao usuário segue o desenvolvimento trigonométrico da apostila.
