@@ -1,6 +1,6 @@
 from core.controllers import ControllerDesigner
 from core.presets import EXERCISES
-from reports.full_pdf import build_controller_full_pdf
+from reports.full_pdf import _geometry_trace_color,build_controller_full_pdf
 from reports.html import build_controller_html
 
 
@@ -42,3 +42,11 @@ def test_complete_pdf_report_is_valid_and_nontrivial():
 
     assert report.startswith(b"%PDF")
     assert len(report)>50000
+
+
+def test_pdf_geometry_uses_explicit_colors():
+    assert _geometry_trace_color("Polos")=="#d62728"
+    assert _geometry_trace_color("Zeros")=="#1f77b4"
+    assert _geometry_trace_color("Polos desejados")=="#ff9800"
+    assert _geometry_trace_color("p1: 30.00°",0)!="#000000"
+    assert _geometry_trace_color("p2: 40.00°",1)!=_geometry_trace_color("p1: 30.00°",0)
