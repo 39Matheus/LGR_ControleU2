@@ -134,3 +134,39 @@ def magnitude_breakdown(design,num_g,den_g,num_h,den_h):
         "kgh":kgh,
         "kc":float(kc),
     }
+
+
+def angle_breakdown(design,num_g,den_g,num_h,den_h):
+    """Dados da condição de ângulo no formato da resolução manual."""
+    plant_zeros=[c for c in design.plant_contributions if c.kind=="zero"]
+    plant_poles=[c for c in design.plant_contributions if c.kind=="pole"]
+    controller_poles=[c for c in design.controller_contributions if c.kind=="pole"]
+    controller_zeros=[c for c in design.controller_contributions if c.kind=="zero"]
+
+    kg=float(np.trim_zeros(np.asarray(num_g,dtype=float),"f")[0]/np.trim_zeros(np.asarray(den_g,dtype=float),"f")[0])
+    kh=float(np.trim_zeros(np.asarray(num_h,dtype=float),"f")[0]/np.trim_zeros(np.asarray(den_h,dtype=float),"f")[0])
+    constant_phase=180.0 if kg*kh<0 else 0.0
+
+    raw_base=(
+        constant_phase
+        +sum(c.angle_deg for c in plant_zeros)
+        -sum(c.angle_deg for c in plant_poles)
+        -sum(c.angle_deg for c in controller_poles)
+    )
+    controller_phase=sum(c.angle_deg for c in controller_zeros)
+    final_raw=raw_base+controller_phase
+    target=180.0+360.0*round((final_raw-180.0)/360.0)
+
+    return {
+        "plant_zeros":plant_zeros,
+        "plant_poles":plant_poles,
+        "controller_poles":controller_poles,
+        "controller_zeros":controller_zeros,
+        "constant_phase":constant_phase,
+        "raw_base":raw_base,
+        "controller_phase":controller_phase,
+        "final_raw":final_raw,
+        "target":target,
+        "kg":kg,
+        "kh":kh,
+    }
