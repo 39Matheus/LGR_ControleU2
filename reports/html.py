@@ -266,12 +266,14 @@ def _verification_section(design):
 
 
 def build_controller_html(design,data):
+    padding=float(data.get("plot_padding",7.0))
     figures=[
-        geometry_figure(design),
+        geometry_figure(design,padding=padding),
         root_locus_figure(
             data["num_g"],data["den_g"],data["num_h"],data["den_h"],
             desired_pole=design.desired_pole,
             title="LGR antes do controlador",
+            padding=padding,
         ),
         root_locus_figure(
             data["num_g"],data["den_g"],data["num_h"],data["den_h"],
@@ -279,6 +281,7 @@ def build_controller_html(design,data):
             controller_num=design.controller_num,
             controller_den=design.controller_den,
             title="LGR com o controlador projetado",
+            padding=padding,
         ),
     ]
     step=step_response_figure(
@@ -356,7 +359,7 @@ def build_controller_html(design,data):
         "<script async src='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js'></script>",
         "</head><body>",
         f"<h1>Projeto {escape(design.controller_type)} pelo LGR</h1>",
-        "<div class='meta'>Relatório completo gerado pelo aplicativo LGR Controle U2.</div>",
+        f"<div class='meta'>Relatório completo gerado pelo aplicativo LGR Controle U2. Margem visual dos gráficos: {padding:g}.</div>",
         _spec_section(design),
         _angle_section(design,data),
         _magnitude_section(design,data),
