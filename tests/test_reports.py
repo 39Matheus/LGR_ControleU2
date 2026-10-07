@@ -34,7 +34,7 @@ def test_complete_html_report_contains_full_derivation_and_plots():
     assert "plotly" in report.lower()
     assert r"\,\cdot\," in report
     assert r"\cdotA" not in report
-    assert "Margem visual dos gráficos: 7" in report
+    assert "Enquadramento: automático proporcional: +20% em x e +10% em y" in report
 
 
 def test_complete_pdf_report_is_valid_and_nontrivial():
