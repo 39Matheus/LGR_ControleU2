@@ -15,6 +15,18 @@ def _finite_points(values):
     return [complex(v) for v in values if np.isfinite(complex(v).real) and np.isfinite(complex(v).imag)]
 
 
+def _focus_ranges(points, padding=10.0):
+    """Faixa inicial simétrica, ignorando ramos do LGR que tendem ao infinito."""
+    pts=_finite_points(points)
+    if not pts:
+        return [-10.0,10.0],[-10.0,10.0]
+    max_real=max(abs(p.real) for p in pts)
+    max_imag=max(abs(p.imag) for p in pts)
+    x_bound=max(10.0,max_real+padding)
+    y_bound=max(10.0,max_imag+padding)
+    return [-x_bound,x_bound],[-y_bound,y_bound]
+
+
 def geometry_figure(design):
     """Diagrama geométrico dos ângulos usados no ponto desejado."""
     fig=go.Figure()
@@ -67,11 +79,14 @@ def geometry_figure(design):
     ))
     fig.add_hline(y=0,line_width=1,line_color="black",opacity=.45)
     fig.add_vline(x=0,line_width=1,line_color="black",opacity=.45)
+    focus_points=[c.singularity for c in allc]+[sd,sd.conjugate()]
+    xrange,yrange=_focus_ranges(focus_points,padding=10.0)
     fig.update_layout(
         title="Geometria da condição de ângulo",
         xaxis_title="Re(s)",yaxis_title="Im(s)",
         height=500,hovermode="closest",
-        yaxis=dict(scaleanchor="x",scaleratio=1),
+        xaxis=dict(range=xrange),
+        yaxis=dict(range=yrange,scaleanchor="x",scaleratio=1),
         margin=dict(l=20,r=20,t=50,b=20),
     )
     return fig
@@ -92,8 +107,10 @@ def root_locus_figure(num_g,den_g,num_h,den_h,desired_pole=None,controller_num=N
     a.adicionar_elementos_geometricos()
     a.calcular_lgr_exato()
 
+    focus_points=list(a.polos)+list(a.zeros)
     if desired_pole is not None:
         sd=complex(desired_pole)
+        focus_points.extend([sd,sd.conjugate()])
         a.fig.add_trace(go.Scatter(
             x=[sd.real,sd.real],
             y=[sd.imag,-sd.imag],
@@ -101,7 +118,18 @@ def root_locus_figure(num_g,den_g,num_h,den_h,desired_pole=None,controller_num=N
             marker=dict(symbol="star",size=14,line=dict(width=1)),
             name="Polo desejado",
         ))
-    a.fig.update_layout(title=title,height=500)
+
+    # O LGR possui ramos que podem tender ao infinito; usar todos os pontos no
+    # autorange torna a região de interesse ilegível. O enquadramento inicial
+    # usa apenas polos, zeros e polo desejado, com margem de 10 unidades.
+    # Zoom, pan e autoscale do Plotly continuam disponíveis manualmente.
+    xrange,yrange=_focus_ranges(focus_points,padding=10.0)
+    a.fig.update_layout(
+        title=title,
+        height=500,
+        xaxis=dict(range=xrange),
+        yaxis=dict(range=yrange,scaleanchor="x",scaleratio=1),
+    )
     return a.fig
 
 
