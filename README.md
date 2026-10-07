@@ -8,13 +8,15 @@ A versão acompanha a apostila até o capítulo 4, **Projeto de Controladores pe
 Método do LGR**. O capítulo 5, *Aproximação Discreta de Funções de Transferência
 Contínuas*, permanece fora do escopo.
 
-Há dois modos:
+A entrada é única e possui uma seleção de operação:
 
 - **Projeto de controlador**: PD, PI e PID com zeros reais iguais.
 - **Análise do LGR**: roteiro clássico em 12 passos.
 
-Os quatro exercícios da primeira lista da Unidade 2 estão disponíveis como
-presets.
+A planta e a realimentação permanecem preenchidas ao alternar entre as
+operações. Os quatro exercícios da primeira lista da Unidade 2 são **presets de
+preenchimento**: eles apenas carregam os campos normais, que continuam
+editáveis antes da execução.
 
 ## Método de resolução
 
@@ -31,6 +33,11 @@ A saída de projeto foi organizada para reprodução manual:
 
 Internamente atan2 é usado somente para escolher corretamente o quadrante; a
 apresentação ao usuário segue o desenvolvimento trigonométrico da apostila.
+
+Antes da análise, G(s)H(s) é reduzida simbolicamente. Fatores comuns exatamente
+cancelados são removidos, e polos/zeros repetidos são calculados primeiro por
+álgebra exata, com fallback numérico. Isso evita falhas de convergência do
+SymPy em casos como a Questão 3.
 
 ## Organização
 
