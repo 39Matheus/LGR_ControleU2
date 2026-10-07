@@ -281,7 +281,7 @@ def build_controller_html(design,data):
             controller_num=design.controller_num,
             controller_den=design.controller_den,
             title="LGR com o controlador projetado",
-            padding=padding,
+            focus=focus,
         ),
     ]
     step=step_response_figure(
