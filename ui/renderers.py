@@ -327,7 +327,7 @@ def render_controller_design(d,data):
                 controller_num=d.controller_num,
                 controller_den=d.controller_den,
                 title="LGR com o controlador projetado",
-                padding=padding,
+                focus=focus,
             ),
             use_container_width=True,
             key="lgr_after_controller",
