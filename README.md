@@ -24,8 +24,11 @@ A saída de projeto foi organizada para reprodução manual:
 
 1. converter Mp/ts, ξ/ωn ou polos dados em polos dominantes;
 2. calcular as contribuições angulares por relações trigonométricas;
-3. obter a posição do(s) zero(s) pela condição de ângulo;
-4. obter Kc pela condição de módulo;
+3. obter a posição do(s) zero(s) pela condição de ângulo, exibindo
+   `Σφ_zeros - Σθ_polos = (2q+1)180°` termo a termo;
+4. aplicar a condição de módulo no formato da resolução manual: distâncias
+   `Ai` aos polos, `Bi` aos zeros, `KT=ΠAi/ΠBi` e
+   `KC=KT/|KG KH|`;
 5. converter para Kp/Ki/Kd;
 6. conferir polos de malha fechada e resposta temporal;
 7. opcionalmente, em especificações por desigualdade, aplicar ajuste fino após
