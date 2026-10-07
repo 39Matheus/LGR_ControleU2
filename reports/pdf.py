@@ -7,6 +7,8 @@ from reportlab.lib.styles import ParagraphStyle,getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import Paragraph,SimpleDocTemplate,Spacer,Table,TableStyle
 
+from core.geometry import magnitude_breakdown
+
 def _styles():
     s=getSampleStyleSheet()
     return (
@@ -83,12 +85,110 @@ def build_controller_pdf(design,num_g,den_g,num_h,den_h):
             )
         ]
 
-    st += [Paragraph("2. Condição de ângulo — trigonometria",h),
-           Paragraph(f"Fase base={design.base_phase_deg:.6f}°. Fase necessária={design.required_phase_deg:.6f}°. Cada zero: φ={design.zero_angle_deg:.6f}°.",b),
-           Paragraph(f"tan(φ)=ωd/(z−σ) ⇒ z={design.zero_parameter:.8g}.",b)]
-    rows=[["Elemento","ΔRe","ΔIm","ângulo (°)"]]+[[c.label,f"{c.dx:.5f}",f"{c.dy:.5f}",f"{c.angle_deg:.5f}"] for c in design.plant_contributions+design.controller_contributions]
-    t=Table(rows,hAlign="LEFT"); t.setStyle(TableStyle([("GRID",(0,0),(-1,-1),0.3,colors.grey),("BACKGROUND",(0,0),(-1,0),colors.lightgrey),("FONTSIZE",(0,0),(-1,-1),7.5)]))
-    st += [t,Spacer(1,4),Paragraph("3. Condição de módulo",h),Paragraph(f"|GcG H|=1 ⇒ Kc={design.kc:.8g}.",b)]
+    plant_zeros=[c for c in design.plant_contributions if c.kind=="zero"]
+    plant_poles=[c for c in design.plant_contributions if c.kind=="pole"]
+    controller_poles=[c for c in design.controller_contributions if c.kind=="pole"]
+    controller_zeros=[c for c in design.controller_contributions if c.kind=="zero"]
+    kg=float(num_g[0]/den_g[0]); kh=float(num_h[0]/den_h[0])
+    gain_phase=180.0 if kg*kh<0 else 0.0
+    raw_base=(
+        gain_phase
+        +sum(c.angle_deg for c in plant_zeros)
+        -sum(c.angle_deg for c in plant_poles)
+        -sum(c.angle_deg for c in controller_poles)
+    )
+    ctrl_phase=sum(c.angle_deg for c in controller_zeros)
+    final_phase=raw_base+ctrl_phase
+    target=180.0+360.0*round((final_phase-180.0)/360.0)
+
+    st += [
+        Paragraph("2. Condição de ângulo — trigonometria",h),
+        Paragraph(
+            "Convenção: soma(phi_zeros) - soma(theta_polos) = (2q+1)180 graus.",
+            b,
+        ),
+    ]
+    rows=[["Elemento","tipo","dRe","dIm","ângulo (graus)"]]+[
+        [c.label,c.kind,f"{c.dx:.5f}",f"{c.dy:.5f}",f"{c.angle_deg:.5f}"]
+        for c in design.plant_contributions+design.controller_contributions
+    ]
+    t=Table(rows,hAlign="LEFT")
+    t.setStyle(TableStyle([
+        ("GRID",(0,0),(-1,-1),0.3,colors.grey),
+        ("BACKGROUND",(0,0),(-1,0),colors.lightgrey),
+        ("FONTSIZE",(0,0),(-1,-1),7.5),
+    ]))
+    st += [t,Spacer(1,4)]
+    st.append(Paragraph(
+        f"Fase sem os zeros do controlador = {raw_base:.5f} graus. "
+        f"Contribuição total necessária dos zeros do controlador = "
+        f"{target-raw_base:.5f} graus.",
+        b,
+    ))
+    if len(controller_zeros)==1:
+        st.append(Paragraph(
+            f"{raw_base:.5f} + phi_c = {target:.0f} -> "
+            f"phi_c={design.zero_angle_deg:.5f} graus.",
+            b,
+        ))
+    else:
+        st.append(Paragraph(
+            f"{raw_base:.5f} + {len(controller_zeros)} phi_c = {target:.0f} -> "
+            f"phi_c={design.zero_angle_deg:.5f} graus.",
+            b,
+        ))
+    st.append(Paragraph(
+        f"tan(phi_c)=wd/(zc-sigma) -> "
+        f"zc=sigma+wd/tan(phi_c)={design.zero_parameter:.8g}.",
+        b,
+    ))
+    st.append(Paragraph(
+        f"Conferência da fase: {final_phase:.5f} graus, equivalente a "
+        "180 graus módulo 360.",
+        b,
+    ))
+
+    mag=magnitude_breakdown(design,num_g,den_g,num_h,den_h)
+    st.append(Paragraph("3. Condição de módulo",h))
+    st.append(Paragraph("|Gc(sd)G(sd)H(sd)|=1.",b))
+    mag_rows=[["Dist.","Elemento","dRe","dIm","módulo"]]
+    for item in mag["poles"]+mag["zeros"]:
+        mag_rows.append([
+            item["term"],item["source_label"],
+            f"{item['dx']:.5f}",f"{item['dy']:.5f}",f"{item['distance']:.6f}",
+        ])
+    mt=Table(mag_rows,hAlign="LEFT")
+    mt.setStyle(TableStyle([
+        ("GRID",(0,0),(-1,-1),0.3,colors.grey),
+        ("BACKGROUND",(0,0),(-1,0),colors.lightgrey),
+        ("FONTSIZE",(0,0),(-1,-1),7.5),
+    ]))
+    st += [mt,Spacer(1,4)]
+    for item in mag["poles"]+mag["zeros"]:
+        st.append(Paragraph(
+            f"{item['term']}=sqrt(({item['dx']:.6f})^2+"
+            f"({item['dy']:.6f})^2)={item['distance']:.6f}.",
+            b,
+        ))
+    a_names=".".join(x["term"] for x in mag["poles"]) or "1"
+    b_names=".".join(x["term"] for x in mag["zeros"]) or "1"
+    st += [
+        Paragraph(
+            f"KT=prod(Ai)/prod(Bi)=({a_names})/({b_names})="
+            f"{mag['prod_a']:.8g}/{mag['prod_b']:.8g}={mag['kt']:.8g}.",
+            b,
+        ),
+        Paragraph(
+            f"KG={mag['kg']:.8g}; KH={mag['kh']:.8g}; "
+            "KT=|KG KH| KC.",
+            b,
+        ),
+        Paragraph(
+            f"KC=KT/|KG KH|={mag['kt']:.8g}/"
+            f"|({mag['kg']:.8g})({mag['kh']:.8g})|={mag['kc']:.8g}.",
+            b,
+        ),
+    ]
     z=design.zero_parameter
     if design.controller_type=="PD": ctrl=f"Gc(s)={design.kc:.8g}(s+{z:.8g}); Kp={design.kp:.8g}; Kd={design.kd:.8g}"
     elif design.controller_type=="PI": ctrl=f"Gc(s)={design.kc:.8g}(s+{z:.8g})/s; Kp={design.kp:.8g}; Ki={design.ki:.8g}"
