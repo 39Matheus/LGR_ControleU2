@@ -2,7 +2,7 @@ import math
 import streamlit as st
 
 from core.geometry import angle_breakdown,magnitude_breakdown
-from core.visualization import geometry_figure,root_locus_figure,step_response_figure
+from core.visualization import focus_description,geometry_figure,root_locus_figure,step_response_figure
 
 def fmt_complex(z,digits=5):
     z=complex(z)
@@ -276,8 +276,8 @@ def _render_desired_pole_derivation(d):
 
 def render_controller_design(d,data):
     _render_desired_pole_derivation(d)
-    padding=float(data.get("plot_padding",7.0))
-    st.plotly_chart(geometry_figure(d,padding=padding),use_container_width=True,key="geometry_controller")
+    focus=data.get("plot_focus")
+    st.plotly_chart(geometry_figure(d,focus=focus),use_container_width=True,key="geometry_controller")
 
     st.subheader("2 — Condição de ângulo")
     st.caption(
@@ -303,8 +303,9 @@ def render_controller_design(d,data):
 
     st.subheader("5 — Representação visual do projeto")
     st.caption(
-        f"Os LGRs abrem inicialmente em uma região de interesse com margem de {padding:g} unidades "
-        "além dos polos, zeros e polo desejado. O zoom e o autoscale do Plotly continuam disponíveis."
+        "Enquadramento inicial: "
+        +focus_description(focus)
+        +". O zoom e o autoscale do Plotly continuam disponíveis."
     )
     left,right=st.columns(2)
     with left:
@@ -313,7 +314,7 @@ def render_controller_design(d,data):
                 data["num_g"],data["den_g"],data["num_h"],data["den_h"],
                 desired_pole=d.desired_pole,
                 title="LGR antes do controlador",
-                padding=padding,
+                focus=focus,
             ),
             use_container_width=True,
             key="lgr_before_controller",
