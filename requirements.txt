@@ -4,3 +4,4 @@ sympy
 control
 plotly
 reportlab
+matplotlib
