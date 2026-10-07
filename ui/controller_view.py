@@ -3,6 +3,7 @@ import re
 import streamlit as st
 
 from core.controllers import ControllerDesigner
+from reports.full_pdf import build_controller_full_pdf
 from reports.html import build_controller_html
 from reports.pdf import build_controller_pdf
 from .renderers import render_controller_design
@@ -44,26 +45,51 @@ def render_controller_result(design,data):
     st.markdown("---")
     st.subheader("Baixar resolução completa")
     st.caption(
-        "O relatório completo mantém o desenvolvimento detalhado e inclui os "
-        "gráficos Plotly. Ele é salvo em HTML para preservar a apresentação e "
-        "a interatividade dos gráficos."
+        "Escolha HTML para manter os gráficos interativos ou PDF para uma "
+        "versão completa e portátil com os mesmos passos e gráficos estáticos."
     )
-    default_name=f"resolucao_completa_{design.controller_type}"
-    filename=st.text_input(
-        "Nome do arquivo",
-        value=default_name,
-        key="full_report_filename",
-        help="A extensão .html é adicionada automaticamente.",
-    )
+    c1,c2=st.columns([1,2])
+    with c1:
+        report_format=st.selectbox(
+            "Formato",
+            ["HTML (interativo)","PDF (completo)"],
+            key="full_report_format",
+        )
+    with c2:
+        default_name=f"resolucao_completa_{design.controller_type}"
+        filename=st.text_input(
+            "Nome do arquivo",
+            value=default_name,
+            key="full_report_filename",
+            help="A extensão correta é adicionada automaticamente.",
+        )
+
     clean_name=_safe_filename(filename,default_name)
-    if clean_name.lower().endswith(".html"):
-        clean_name=clean_name[:-5]
-    full_report=build_controller_html(design,data)
+    for ext in (".html",".pdf"):
+        if clean_name.lower().endswith(ext):
+            clean_name=clean_name[:-len(ext)]
+
+    if report_format=="HTML (interativo)":
+        st.caption(
+            "HTML: tema claro fixo, equações formatadas e gráficos Plotly interativos."
+        )
+        full_report=build_controller_html(design,data)
+        extension="html"
+        mime="text/html"
+    else:
+        st.caption(
+            "PDF: mantém toda a sequência da resolução e inclui os gráficos "
+            "como imagens estáticas para impressão/arquivo."
+        )
+        full_report=build_controller_full_pdf(design,data)
+        extension="pdf"
+        mime="application/pdf"
+
     st.download_button(
-        "Baixar resolução completa",
+        f"Baixar resolução completa em {extension.upper()}",
         data=full_report,
-        file_name=f"{clean_name}.html",
-        mime="text/html",
+        file_name=f"{clean_name}.{extension}",
+        mime=mime,
         use_container_width=True,
         type="primary",
     )
