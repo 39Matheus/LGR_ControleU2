@@ -5,7 +5,7 @@ from io import StringIO
 import plotly.io as pio
 
 from core.geometry import angle_breakdown,magnitude_breakdown
-from core.visualization import geometry_figure,root_locus_figure,step_response_figure
+from core.visualization import focus_description,geometry_figure,root_locus_figure,step_response_figure
 
 
 def _fmtc(z,d=6):
@@ -266,14 +266,14 @@ def _verification_section(design):
 
 
 def build_controller_html(design,data):
-    padding=float(data.get("plot_padding",7.0))
+    focus=data.get("plot_focus")
     figures=[
-        geometry_figure(design,padding=padding),
+        geometry_figure(design,focus=focus),
         root_locus_figure(
             data["num_g"],data["den_g"],data["num_h"],data["den_h"],
             desired_pole=design.desired_pole,
             title="LGR antes do controlador",
-            padding=padding,
+            focus=focus,
         ),
         root_locus_figure(
             data["num_g"],data["den_g"],data["num_h"],data["den_h"],
@@ -359,7 +359,7 @@ def build_controller_html(design,data):
         "<script async src='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js'></script>",
         "</head><body>",
         f"<h1>Projeto {escape(design.controller_type)} pelo LGR</h1>",
-        f"<div class='meta'>Relatório completo gerado pelo aplicativo LGR Controle U2. Margem visual dos gráficos: {padding:g}.</div>",
+        f"<div class='meta'>Relatório completo gerado pelo aplicativo LGR Controle U2. Enquadramento: {escape(focus_description(focus))}.</div>",
         _spec_section(design),
         _angle_section(design,data),
         _magnitude_section(design,data),
