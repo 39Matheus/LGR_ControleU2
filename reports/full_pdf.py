@@ -83,6 +83,24 @@ def _table(headers,rows,widths=None,font_size=7.2):
     return t
 
 
+def _mpl_color(value):
+    if not isinstance(value,str):
+        return value
+    text=value.strip()
+    lower=text.lower()
+    if lower.startswith("rgba(") or lower.startswith("rgb("):
+        values=text[text.find("(")+1:text.rfind(")")].split(",")
+        try:
+            nums=[float(x.strip()) for x in values]
+            if len(nums)>=3:
+                rgb=[v/255.0 if v>1 else v for v in nums[:3]]
+                alpha=nums[3] if len(nums)>3 else 1.0
+                return (rgb[0],rgb[1],rgb[2],alpha)
+        except Exception:
+            return None
+    return value
+
+
 def _mpl_marker(symbol):
     return {
         "x":"x","circle-open":"o","circle":"o","star":"*",
@@ -122,9 +140,9 @@ def _plotly_png(fig,width=7.7,height=4.6,dpi=150):
         marker=getattr(tr,"marker",None)
         color=None
         if line is not None and getattr(line,"color",None):
-            color=line.color
+            color=_mpl_color(line.color)
         elif marker is not None and isinstance(getattr(marker,"color",None),str):
-            color=marker.color
+            color=_mpl_color(marker.color)
 
         if "lines" in mode:
             ax.plot(
@@ -136,12 +154,25 @@ def _plotly_png(fig,width=7.7,height=4.6,dpi=150):
         if "markers" in mode:
             symbol=getattr(marker,"symbol","circle") if marker is not None else "circle"
             size=float(getattr(marker,"size",7) or 7)
-            face="none" if "open" in str(symbol) else color
-            ax.scatter(
-                xf,yf,label=(name or None) if "lines" not in mode else None,
-                s=max(16,size**2),marker=_mpl_marker(symbol),
-                facecolors=face,edgecolors=color if color else None,linewidths=1.1,
+            marker_line=getattr(marker,"line",None) if marker is not None else None
+            edge=_mpl_color(getattr(marker_line,"color",None)) if marker_line is not None else None
+            if edge is None:
+                edge=color if color is not None else "black"
+            mpl_symbol=_mpl_marker(symbol)
+            kwargs=dict(
+                x=xf,y=yf,
+                label=(name or None) if "lines" not in mode else None,
+                s=max(16,size**2),marker=mpl_symbol,linewidths=1.1,
             )
+            if mpl_symbol=="x":
+                kwargs["color"]=edge
+            elif "open" in str(symbol):
+                kwargs["facecolors"]="none"
+                kwargs["edgecolors"]=edge
+            else:
+                kwargs["facecolors"]=color if color is not None else edge
+                kwargs["edgecolors"]=edge
+            ax.scatter(**kwargs)
         if "text" in mode:
             texts=getattr(tr,"text",None)
             if texts is not None:
@@ -154,7 +185,7 @@ def _plotly_png(fig,width=7.7,height=4.6,dpi=150):
         try:
             if sh.type=="line":
                 if sh.x0==sh.x1:
-                    ax.axvline(float(sh.x0),linewidth=float(sh.line.width or 1),linestyle=_mpl_dash(sh.line.dash),color=sh.line.color or "#777777",alpha=float(sh.opacity or 1))
+                    ax.axvline(float(sh.x0),linewidth=float(sh.line.width or 1),linestyle=_mpl_dash(sh.line.dash),color=_mpl_color(sh.line.color) or "#777777",alpha=float(sh.opacity or 1))
                 elif sh.y0==sh.y1:
                     ax.axhline(float(sh.y0),linewidth=float(sh.line.width or 1),linestyle=_mpl_dash(sh.line.dash),color=sh.line.color or "#777777",alpha=float(sh.opacity or 1))
         except Exception:
