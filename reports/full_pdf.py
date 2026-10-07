@@ -17,7 +17,7 @@ from reportlab.platypus import (
 )
 
 from core.geometry import angle_breakdown, magnitude_breakdown
-from core.visualization import geometry_figure, root_locus_figure, step_response_figure
+from core.visualization import focus_description, geometry_figure, root_locus_figure, step_response_figure
 
 
 def _fmtc(z,d=6):
@@ -320,7 +320,7 @@ def _spec_story(design,styles):
 
 
 def build_controller_full_pdf(design,data):
-    padding=float(data.get("plot_padding",7.0))
+    focus=data.get("plot_focus")
     buf=BytesIO()
     styles=_styles()
     doc=SimpleDocTemplate(
@@ -333,7 +333,7 @@ def build_controller_full_pdf(design,data):
         Paragraph(
             "Relatório detalhado com o mesmo encadeamento da interface. "
             f"Os gráficos são incluídos como imagens estáticas no PDF. "
-            f"Margem visual utilizada: {padding:g}.",
+            f"Enquadramento utilizado: {focus_description(focus)}.",
             styles["body"],
         ),
     ]
@@ -413,16 +413,16 @@ def build_controller_full_pdf(design,data):
 
     story.append(PageBreak())
     story.append(Paragraph("5 - Representação visual do projeto",styles["h2"]))
-    geometry=geometry_figure(design,padding=padding)
+    geometry=geometry_figure(design,focus=focus)
     before=root_locus_figure(
         data["num_g"],data["den_g"],data["num_h"],data["den_h"],
-        desired_pole=design.desired_pole,title="LGR antes do controlador",padding=padding,
+        desired_pole=design.desired_pole,title="LGR antes do controlador",focus=focus,
     )
     after=root_locus_figure(
         data["num_g"],data["den_g"],data["num_h"],data["den_h"],
         desired_pole=design.desired_pole,
         controller_num=design.controller_num,controller_den=design.controller_den,
-        title="LGR com o controlador projetado",padding=padding,
+        title="LGR com o controlador projetado",focus=focus,
     )
     story.append(_chart_image(geometry,17.2*cm,9.2*cm,width=8.0,height=4.3))
     pair=Table(
