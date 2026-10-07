@@ -88,3 +88,12 @@ A resolução de projeto possui duas saídas:
   gráficos Plotly navegáveis, ou como **PDF completo**, mantendo a mesma
   sequência de resolução com gráficos estáticos. O nome do arquivo pode ser
   definido antes do download.
+
+
+## Enquadramento dos gráficos
+
+O projeto de controlador possui a entrada **Margem visual dos gráficos
+(padding)**. O valor padrão é **7** e pode ser alterado por questão. A faixa
+inicial é calculada a partir dos polos, zeros e polo desejado; o mesmo padding é
+usado na interface, no relatório HTML e no PDF completo. O limite mínimo dos
+eixos permanece em ±10.
