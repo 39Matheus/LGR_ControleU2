@@ -28,7 +28,14 @@ class ControllerDesigner:
         base=l0/sd if origin_pole else l0
         base_phase=phase_deg(base)
         required=phase_deficiency(base_phase)
-        phi=split_zero_phase(required,nzeros)
+        try:
+            phi=split_zero_phase(required,nzeros)
+        except ValueError as exc:
+            raise ValueError(
+                f"Fase incompatível com zeros reais nesta configuração: "
+                f"fase base={base_phase:.3f}°, contribuição necessária={required:.3f}°, "
+                f"{nzeros} zero(s)."
+            ) from exc
         z=real_zero_parameter(sd,phi)
         if z<=0: raise ValueError("A solução exige zero fora da forma s=-z com z>0.")
         factor=(sd+z)**nzeros
