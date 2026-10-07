@@ -276,7 +276,8 @@ def _render_desired_pole_derivation(d):
 
 def render_controller_design(d,data):
     _render_desired_pole_derivation(d)
-    st.plotly_chart(geometry_figure(d),use_container_width=True,key="geometry_controller")
+    padding=float(data.get("plot_padding",7.0))
+    st.plotly_chart(geometry_figure(d,padding=padding),use_container_width=True,key="geometry_controller")
 
     st.subheader("2 — Condição de ângulo")
     st.caption(
@@ -302,7 +303,7 @@ def render_controller_design(d,data):
 
     st.subheader("5 — Representação visual do projeto")
     st.caption(
-        "Os LGRs abrem inicialmente em uma região de interesse com margem de 10 unidades "
+        f"Os LGRs abrem inicialmente em uma região de interesse com margem de {padding:g} unidades "
         "além dos polos, zeros e polo desejado. O zoom e o autoscale do Plotly continuam disponíveis."
     )
     left,right=st.columns(2)
@@ -312,6 +313,7 @@ def render_controller_design(d,data):
                 data["num_g"],data["den_g"],data["num_h"],data["den_h"],
                 desired_pole=d.desired_pole,
                 title="LGR antes do controlador",
+                padding=padding,
             ),
             use_container_width=True,
             key="lgr_before_controller",
@@ -324,6 +326,7 @@ def render_controller_design(d,data):
                 controller_num=d.controller_num,
                 controller_den=d.controller_den,
                 title="LGR com o controlador projetado",
+                padding=padding,
             ),
             use_container_width=True,
             key="lgr_after_controller",
