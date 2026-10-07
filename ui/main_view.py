@@ -132,6 +132,21 @@ def _common_data():
     }
 
 
+def _plot_focus_from_state():
+    mode_map={
+        "Automático proporcional":"auto_proportional",
+        "Proporcional personalizado":"proportional",
+        "Linear personalizado":"linear",
+    }
+    return {
+        "mode":mode_map[st.session_state["input_plot_focus_mode"]],
+        "x_percent":float(st.session_state["input_plot_x_percent"]),
+        "y_percent":float(st.session_state["input_plot_y_percent"]),
+        "x_padding":float(st.session_state["input_plot_x_padding"]),
+        "y_padding":float(st.session_state["input_plot_y_padding"]),
+    }
+
+
 def _controller_specs():
     kind=st.session_state["input_spec_kind"]
     if kind=="Mp + ts":
@@ -302,19 +317,7 @@ def render_main_view():
                     if st.session_state["input_spec_kind"]=="Mp + ts"
                     else False
                 )
-                mode_label=st.session_state["input_plot_focus_mode"]
-                mode_map={
-                    "Automático proporcional":"auto_proportional",
-                    "Proporcional personalizado":"proportional",
-                    "Linear personalizado":"linear",
-                }
-                data["plot_focus"]={
-                    "mode":mode_map[mode_label],
-                    "x_percent":float(st.session_state["input_plot_x_percent"]),
-                    "y_percent":float(st.session_state["input_plot_y_percent"]),
-                    "x_padding":float(st.session_state["input_plot_x_padding"]),
-                    "y_padding":float(st.session_state["input_plot_y_padding"]),
-                }
+                data["plot_focus"]=_plot_focus_from_state()
                 design=solve_controller(data)
                 st.session_state["last_controller_result"]=(design,data)
             except Exception as exc:
@@ -324,19 +327,7 @@ def render_main_view():
             st.markdown("---")
             st.caption("Resultado da última execução do modo Projeto de controlador.")
             design,data=st.session_state["last_controller_result"]
-            mode_label=st.session_state["input_plot_focus_mode"]
-            mode_map={
-                "Automático proporcional":"auto_proportional",
-                "Proporcional personalizado":"proportional",
-                "Linear personalizado":"linear",
-            }
-            data["plot_focus"]={
-                "mode":mode_map[mode_label],
-                "x_percent":float(st.session_state["input_plot_x_percent"]),
-                "y_percent":float(st.session_state["input_plot_y_percent"]),
-                "x_padding":float(st.session_state["input_plot_x_padding"]),
-                "y_padding":float(st.session_state["input_plot_y_padding"]),
-            }
+            data["plot_focus"]=_plot_focus_from_state()
             render_controller_result(design,data)
 
     else:
