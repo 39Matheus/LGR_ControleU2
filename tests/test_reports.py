@@ -1,5 +1,6 @@
 from core.controllers import ControllerDesigner
 from core.presets import EXERCISES
+from reports.full_pdf import build_controller_full_pdf
 from reports.html import build_controller_html
 
 
@@ -33,3 +34,11 @@ def test_complete_html_report_contains_full_derivation_and_plots():
     assert "plotly" in report.lower()
     assert r"\,\cdot\," in report
     assert r"\cdotA" not in report
+
+
+def test_complete_pdf_report_is_valid_and_nontrivial():
+    design,data=_q1()
+    report=build_controller_full_pdf(design,data)
+
+    assert report.startswith(b"%PDF")
+    assert len(report)>50000
