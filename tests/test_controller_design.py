@@ -1,5 +1,6 @@
 import math
 from core.controllers import ControllerDesigner
+from core.geometry import magnitude_breakdown
 from core.presets import EXERCISES
 
 def solve(name,auto_refine=False):
@@ -50,3 +51,27 @@ def test_q1_full_response_after_optional_refinement():
     assert d.metrics and d.metrics.stable
     assert d.metrics.overshoot_percent is None or d.metrics.overshoot_percent<=10.001
     assert d.metrics.settling_time is None or d.metrics.settling_time<4.0
+
+
+def test_q2_magnitude_breakdown_matches_manual_gain_separation():
+    x=EXERCISES["Questão 2 — PD (ξ e ωn)"]
+    d=solve("Questão 2 — PD (ξ e ωn)")
+    m=magnitude_breakdown(
+        d,x["num_g"],x["den_g"],x["num_h"],x["den_h"]
+    )
+    assert math.isclose(m["kg"],1/10000,rel_tol=1e-12)
+    assert math.isclose(m["kh"],1.0,rel_tol=1e-12)
+    assert math.isclose(m["kt"],0.7,rel_tol=1e-7)
+    assert math.isclose(m["kc"],d.kc,rel_tol=1e-10)
+
+
+def test_q3_magnitude_breakdown_matches_manual_gain_separation():
+    x=EXERCISES["Questão 3 — PI (polos desejados)"]
+    d=solve("Questão 3 — PI (polos desejados)")
+    m=magnitude_breakdown(
+        d,x["num_g"],x["den_g"],x["num_h"],x["den_h"]
+    )
+    assert math.isclose(m["kg"],5.0,rel_tol=1e-12)
+    assert math.isclose(m["kh"],0.2,rel_tol=1e-12)
+    assert math.isclose(m["kt"],7.0,rel_tol=1e-7)
+    assert math.isclose(m["kc"],d.kc,rel_tol=1e-10)
