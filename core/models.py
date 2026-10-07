@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 @dataclass
 class TrigContribution:
@@ -39,4 +39,4 @@ class ControllerDesign:
     closed_loop_poles: List[complex]=field(default_factory=list)
     metrics: Optional[SimulationMetrics]=None
     refinement_history: List[Dict[str,float]]=field(default_factory=list)
-    specification_summary: Dict[str,float]=field(default_factory=dict)
+    specification_summary: Dict[str,Any]=field(default_factory=dict)
