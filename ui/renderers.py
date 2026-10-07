@@ -86,7 +86,7 @@ def _render_desired_pole_derivation(d):
             st.success("O polo de fronteira já foi aceito como polo de projeto.")
 
     elif source=="zeta_wn":
-        st.markdown("Como \(\xi\) e \(\omega_n\) são dados, usa-se diretamente o modelo dominante de 2ª ordem.")
+        st.markdown(r"Como \(\xi\) e \(\omega_n\) são dados, usa-se diretamente o modelo dominante de 2ª ordem.")
         st.latex(
             rf"\sigma=\xi\omega_n={zeta0:.6f}\cdot{wn0:.6f}={sigma0:.6f}"
         )
