@@ -320,6 +320,7 @@ def _spec_story(design,styles):
 
 
 def build_controller_full_pdf(design,data):
+    padding=float(data.get("plot_padding",7.0))
     buf=BytesIO()
     styles=_styles()
     doc=SimpleDocTemplate(
@@ -331,7 +332,8 @@ def build_controller_full_pdf(design,data):
         Paragraph(f"Projeto {design.controller_type} pelo LGR - Resolução completa",styles["title"]),
         Paragraph(
             "Relatório detalhado com o mesmo encadeamento da interface. "
-            "Os gráficos são incluídos como imagens estáticas no PDF.",
+            f"Os gráficos são incluídos como imagens estáticas no PDF. "
+            f"Margem visual utilizada: {padding:g}.",
             styles["body"],
         ),
     ]
@@ -411,16 +413,16 @@ def build_controller_full_pdf(design,data):
 
     story.append(PageBreak())
     story.append(Paragraph("5 - Representação visual do projeto",styles["h2"]))
-    geometry=geometry_figure(design)
+    geometry=geometry_figure(design,padding=padding)
     before=root_locus_figure(
         data["num_g"],data["den_g"],data["num_h"],data["den_h"],
-        desired_pole=design.desired_pole,title="LGR antes do controlador",
+        desired_pole=design.desired_pole,title="LGR antes do controlador",padding=padding,
     )
     after=root_locus_figure(
         data["num_g"],data["den_g"],data["num_h"],data["den_h"],
         desired_pole=design.desired_pole,
         controller_num=design.controller_num,controller_den=design.controller_den,
-        title="LGR com o controlador projetado",
+        title="LGR com o controlador projetado",padding=padding,
     )
     story.append(_chart_image(geometry,17.2*cm,9.2*cm,width=8.0,height=4.3))
     pair=Table(
