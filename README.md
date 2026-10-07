@@ -92,8 +92,16 @@ A resolução de projeto possui duas saídas:
 
 ## Enquadramento dos gráficos
 
-O projeto de controlador possui a entrada **Margem visual dos gráficos
-(padding)**. O valor padrão é **7** e pode ser alterado por questão. A faixa
-inicial é calculada a partir dos polos, zeros e polo desejado; o mesmo padding é
-usado na interface, no relatório HTML e no PDF completo. O limite mínimo dos
-eixos permanece em ±10.
+O enquadramento padrão é **automático proporcional**: acrescenta 20% ao maior
+valor absoluto relevante no eixo x e 10% ao maior valor absoluto relevante no
+eixo y. A faixa continua simétrica em torno da origem e com limite mínimo de
+±10.
+
+Também há dois ajustes manuais:
+
+- **Proporcional personalizado**: percentuais independentes para x e y.
+- **Linear personalizado**: margens absolutas independentes para x e y.
+
+A mesma configuração é usada na interface, no relatório HTML e no PDF
+completo. A margem linear antiga continua aceita internamente por
+compatibilidade.
