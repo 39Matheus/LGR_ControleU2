@@ -61,7 +61,7 @@ class ControllerDesigner:
             [float(v) for v in num_c],[float(v) for v in den_c],float(base_phase),float(required),float(phi),
             plant,ctrl_contrib,poles,metrics)
 
-    def design(self,controller_type,specs,auto_refine=True):
+    def design(self,controller_type,specs,auto_refine=False):
         pole,zeta,wn,sigma=resolve_specs(specs)
 
         if specs.pole is not None:
