@@ -157,6 +157,11 @@ def angle_breakdown(design,num_g,den_g,num_h,den_h):
     final_raw=raw_base+controller_phase
     target=180.0+360.0*round((final_raw-180.0)/360.0)
 
+    plant_ids={
+        "zero":{c.label:i for i,c in enumerate(plant_zeros,1)},
+        "pole":{c.label:i for i,c in enumerate(plant_poles,1)},
+    }
+
     return {
         "plant_zeros":plant_zeros,
         "plant_poles":plant_poles,
@@ -169,4 +174,5 @@ def angle_breakdown(design,num_g,den_g,num_h,den_h):
         "target":target,
         "kg":kg,
         "kh":kh,
+        "plant_ids":plant_ids,
     }
