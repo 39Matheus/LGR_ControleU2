@@ -25,7 +25,64 @@ def build_controller_pdf(design,num_g,den_g,num_h,den_h):
     title,h,b=_styles()
     st=[Paragraph(f"Projeto {design.controller_type} pelo LGR — Modo Prova",title)]
     s=design.specification_summary
-    st += [Paragraph("1. Polo desejado",h),Paragraph(f"s_d={_fmtc(design.desired_pole)}; ξ={s.get('zeta',0):.6f}; ωn={s.get('omega_n',0):.6f}.",b)]
+    source=s.get("source")
+    initial_pole=complex(s.get("initial_pole",design.desired_pole))
+    zeta0=float(s.get("initial_zeta",s.get("zeta",0.0)))
+    wn0=float(s.get("initial_omega_n",s.get("omega_n",0.0)))
+    sigma0=float(s.get("initial_sigma",-initial_pole.real))
+    wd0=float(s.get("initial_omega_d",abs(initial_pole.imag)))
+
+    st.append(Paragraph("1. Obtenção do polo desejado",h))
+    if source=="mp_ts":
+        mp=float(s["mp_max"]); ts=float(s["ts_max"]); band=float(s["settling_band"])
+        c=3.0 if abs(band-0.05)<1e-12 else 4.0
+        st += [
+            Paragraph(
+                f"Mp={mp:.6g}% -> Mp={mp/100.0:.6g}; "
+                f"xi=-ln(Mp)/sqrt(pi^2+ln(Mp)^2)={zeta0:.6f}.",
+                b,
+            ),
+            Paragraph(
+                f"ts({100*band:.0f}%)≈{c:g}/sigma -> "
+                f"sigma={c:g}/{ts:.6g}={sigma0:.6f}.",
+                b,
+            ),
+            Paragraph(
+                f"wn=sigma/xi={wn0:.6f}; "
+                f"wd=wn*sqrt(1-xi^2)={wd0:.6f}; "
+                f"s_d0={_fmtc(initial_pole)}.",
+                b,
+            ),
+        ]
+        if s.get("adjusted"):
+            st.append(Paragraph(
+                f"Após verificação da planta completa, mantendo xi e aumentando sigma: "
+                f"s_d={_fmtc(design.desired_pole)}; "
+                f"sigma_f={s['sigma']:.6f}; wn_f={s['omega_n']:.6f}.",
+                b,
+            ))
+    elif source=="zeta_wn":
+        st += [
+            Paragraph(
+                f"Dados xi={zeta0:.6f} e wn={wn0:.6f}: "
+                f"sigma=xi*wn={sigma0:.6f}.",
+                b,
+            ),
+            Paragraph(
+                f"wd=wn*sqrt(1-xi^2)={wd0:.6f}; "
+                f"s_d=-sigma±jwd={_fmtc(initial_pole)} e conjugado.",
+                b,
+            ),
+        ]
+    else:
+        st += [
+            Paragraph(
+                f"Polo fornecido: s_d={_fmtc(initial_pole)} e conjugado; "
+                f"wn=|s_d|={wn0:.6f}; xi=-Re(s_d)/wn={zeta0:.6f}.",
+                b,
+            )
+        ]
+
     st += [Paragraph("2. Condição de ângulo — trigonometria",h),
            Paragraph(f"Fase base={design.base_phase_deg:.6f}°. Fase necessária={design.required_phase_deg:.6f}°. Cada zero: φ={design.zero_angle_deg:.6f}°.",b),
            Paragraph(f"tan(φ)=ωd/(z−σ) ⇒ z={design.zero_parameter:.8g}.",b)]
