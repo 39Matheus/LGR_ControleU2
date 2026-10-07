@@ -18,6 +18,7 @@ _DEFAULTS={
     "input_mp":10.0,
     "input_ts":4.0,
     "input_band":5,
+    "input_auto_refine":False,
     "input_zeta":0.7,
     "input_wn":0.5,
     "input_pole_real":-4.0,
@@ -110,6 +111,7 @@ def _load_preset(name):
             "input_mp":float(specs.mp_max),
             "input_ts":float(specs.ts_max),
             "input_band":int(round(100*specs.settling_band)),
+            "input_auto_refine":False,
         })
 
     st.session_state.update(values)
@@ -218,6 +220,19 @@ def render_main_view():
             a.number_input("Mp máx (%)",0.01,99.0,key="input_mp")
             b.number_input("ts máx (s)",0.001,key="input_ts")
             c.selectbox("Critério ts",[5,2],key="input_band")
+            st.checkbox(
+                "Aplicar ajuste fino após o projeto de fronteira",
+                key="input_auto_refine",
+                help=(
+                    "Desmarcado: usa exatamente o polo de fronteira obtido de Mp e ts. "
+                    "Marcado: simula a planta completa e, se necessário, desloca o polo "
+                    "mantendo ξ até satisfazer as especificações."
+                ),
+            )
+            if not st.session_state["input_auto_refine"]:
+                st.caption(
+                    "Modo prova: o controlador será calculado diretamente com o polo de fronteira."
+                )
         elif st.session_state["input_spec_kind"]=="ξ + ωn":
             a,b=st.columns(2)
             a.number_input("ξ",0.001,0.999,key="input_zeta")
@@ -232,6 +247,11 @@ def render_main_view():
                 data=_common_data()
                 data["controller"]=st.session_state["input_controller"]
                 data["specs"]=_controller_specs()
+                data["auto_refine"]=(
+                    st.session_state["input_auto_refine"]
+                    if st.session_state["input_spec_kind"]=="Mp + ts"
+                    else False
+                )
                 design=solve_controller(data)
                 st.session_state["last_controller_result"]=(design,data)
             except Exception as exc:
