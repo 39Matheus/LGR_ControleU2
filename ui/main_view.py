@@ -19,7 +19,11 @@ _DEFAULTS={
     "input_ts":4.0,
     "input_band":5,
     "input_auto_refine":False,
-    "input_plot_padding":7.0,
+    "input_plot_focus_mode":"Automático proporcional",
+    "input_plot_x_percent":20.0,
+    "input_plot_y_percent":10.0,
+    "input_plot_x_padding":7.0,
+    "input_plot_y_padding":7.0,
     "input_zeta":0.7,
     "input_wn":0.5,
     "input_pole_real":-4.0,
@@ -209,18 +213,51 @@ def render_main_view():
     if st.session_state["input_mode"]=="Projeto de controlador":
         st.subheader("Parâmetros do projeto")
         st.selectbox("Controlador",["PD","PI","PID"],key="input_controller")
-        st.number_input(
-            "Margem visual dos gráficos (padding)",
-            min_value=0.0,
-            max_value=100.0,
-            step=1.0,
-            key="input_plot_padding",
+
+        st.selectbox(
+            "Enquadramento inicial dos gráficos",
+            [
+                "Automático proporcional",
+                "Proporcional personalizado",
+                "Linear personalizado",
+            ],
+            key="input_plot_focus_mode",
             help=(
-                "Margem adicionada ao maior módulo das partes real e imaginária "
-                "usadas no enquadramento inicial. O padrão é 7. "
-                "O limite mínimo do gráfico continua sendo ±10."
+                "O automático usa +20% do maior |Re| em x e +10% do maior |Im| em y. "
+                "Você também pode definir percentuais ou margens lineares manualmente."
             ),
         )
+        if st.session_state["input_plot_focus_mode"]=="Automático proporcional":
+            st.caption(
+                "Padrão: eixo x recebe 20% de margem e eixo y recebe 10%, "
+                "calculados sobre os maiores valores absolutos relevantes."
+            )
+        elif st.session_state["input_plot_focus_mode"]=="Proporcional personalizado":
+            px,py=st.columns(2)
+            px.number_input(
+                "Margem proporcional em x (%)",
+                min_value=0.0,max_value=500.0,step=1.0,
+                key="input_plot_x_percent",
+            )
+            py.number_input(
+                "Margem proporcional em y (%)",
+                min_value=0.0,max_value=500.0,step=1.0,
+                key="input_plot_y_percent",
+            )
+        else:
+            px,py=st.columns(2)
+            px.number_input(
+                "Margem linear em x",
+                min_value=0.0,max_value=1000.0,step=1.0,
+                key="input_plot_x_padding",
+            )
+            py.number_input(
+                "Margem linear em y",
+                min_value=0.0,max_value=1000.0,step=1.0,
+                key="input_plot_y_padding",
+            )
+        st.caption("O limite mínimo dos eixos continua sendo ±10.")
+
         st.radio(
             "Especificação",
             ["Mp + ts","ξ + ωn","Polos desejados"],
@@ -265,7 +302,19 @@ def render_main_view():
                     if st.session_state["input_spec_kind"]=="Mp + ts"
                     else False
                 )
-                data["plot_padding"]=float(st.session_state["input_plot_padding"])
+                mode_label=st.session_state["input_plot_focus_mode"]
+                mode_map={
+                    "Automático proporcional":"auto_proportional",
+                    "Proporcional personalizado":"proportional",
+                    "Linear personalizado":"linear",
+                }
+                data["plot_focus"]={
+                    "mode":mode_map[mode_label],
+                    "x_percent":float(st.session_state["input_plot_x_percent"]),
+                    "y_percent":float(st.session_state["input_plot_y_percent"]),
+                    "x_padding":float(st.session_state["input_plot_x_padding"]),
+                    "y_padding":float(st.session_state["input_plot_y_padding"]),
+                }
                 design=solve_controller(data)
                 st.session_state["last_controller_result"]=(design,data)
             except Exception as exc:
@@ -275,7 +324,19 @@ def render_main_view():
             st.markdown("---")
             st.caption("Resultado da última execução do modo Projeto de controlador.")
             design,data=st.session_state["last_controller_result"]
-            data["plot_padding"]=float(st.session_state["input_plot_padding"])
+            mode_label=st.session_state["input_plot_focus_mode"]
+            mode_map={
+                "Automático proporcional":"auto_proportional",
+                "Proporcional personalizado":"proportional",
+                "Linear personalizado":"linear",
+            }
+            data["plot_focus"]={
+                "mode":mode_map[mode_label],
+                "x_percent":float(st.session_state["input_plot_x_percent"]),
+                "y_percent":float(st.session_state["input_plot_y_percent"]),
+                "x_padding":float(st.session_state["input_plot_x_padding"]),
+                "y_padding":float(st.session_state["input_plot_y_padding"]),
+            }
             render_controller_result(design,data)
 
     else:
