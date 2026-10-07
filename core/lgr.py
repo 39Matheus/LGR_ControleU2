@@ -40,34 +40,39 @@ class AnalisadorLGR:
         self.numH = np.asarray(numH, dtype=float)
         self.denH = np.asarray(denH, dtype=float)
 
+        self.s, self.K = sp.symbols("s K", real=True)
+        self.w = sp.symbols("w", real=True)
+
+        # Forma G(s)H(s) diretamente pelos coeficientes e racionaliza números
+        # decimais simples (0.2 -> 1/5, por exemplo). Isso permite ao SymPy
+        # reconhecer cancelamentos exatos e polos múltiplos sem depender de nroots.
+        num_arr = np.convolve(self.numG, self.numH)
+        den_arr = np.convolve(self.denG, self.denH)
+        num_coeffs = [sp.nsimplify(float(c), rational=True, tolerance=1e-12) for c in num_arr]
+        den_coeffs = [sp.nsimplify(float(c), rational=True, tolerance=1e-12) for c in den_arr]
+
+        raw_num = sp.Poly.from_list(num_coeffs, gens=self.s).as_expr()
+        raw_den = sp.Poly.from_list(den_coeffs, gens=self.s).as_expr()
+        self.raw_num_expr = sp.factor(raw_num)
+        self.raw_den_expr = sp.factor(raw_den)
+
+        # O LGR clássico trabalha com a função de malha aberta reduzida.
+        # Pares polo-zero exatamente cancelados não devem aparecer como ramos.
+        self.P_expr = sp.cancel(self.raw_num_expr / self.raw_den_expr)
+        reduced_num, reduced_den = sp.fraction(self.P_expr)
+        self.num_expr = sp.factor(reduced_num)
+        self.den_expr = sp.factor(reduced_den)
+
         if ctrl is not None:
             self.G = ctrl.TransferFunction(numG, denG)
             self.H = ctrl.TransferFunction(numH, denH)
-            self.GH = self.G * self.H
+            num_reduced = [float(sp.N(c)) for c in sp.Poly(self.num_expr, self.s).all_coeffs()]
+            den_reduced = [float(sp.N(c)) for c in sp.Poly(self.den_expr, self.s).all_coeffs()]
+            self.GH = ctrl.TransferFunction(num_reduced, den_reduced)
         else:
             self.G = None
             self.H = None
             self.GH = None
-
-        self.s, self.K = sp.symbols("s K", real=True)
-        self.w = sp.symbols("w", real=True)
-
-        # Retira os coeficientes da função de transferência G(s)H(s) e os leva
-        # para expressões simbólicas. K fica explicitamente separado.
-        if ctrl is not None:
-            num_arr = np.asarray(self.GH.num[0][0], dtype=float)
-            den_arr = np.asarray(self.GH.den[0][0], dtype=float)
-        else:
-            # Convolução de numeradores e denominadores para formar G(s)H(s).
-            num_arr = np.convolve(self.numG, self.numH)
-            den_arr = np.convolve(self.denG, self.denH)
-
-        self.num_expr = sp.Poly.from_list(num_arr.tolist(), gens=self.s).as_expr()
-        self.den_expr = sp.Poly.from_list(den_arr.tolist(), gens=self.s).as_expr()
-
-        self.num_expr = sp.factor(self.num_expr)
-        self.den_expr = sp.factor(self.den_expr)
-        self.P_expr = sp.cancel(self.num_expr / self.den_expr)
 
         # Ganho constante de P(s) quando escrito na forma fatorada:
         # P(s) = C * prod(s-z_i) / prod(s-p_i).
@@ -220,12 +225,48 @@ class AnalisadorLGR:
     # ------------------------------------------------------------------
     # Passos 1 e 2
     # ------------------------------------------------------------------
-    def calcular_polos_zeros(self) -> Dict[str, Any]:
-        raizes_num = sp.roots(self.num_expr, self.s)
-        raizes_den = sp.roots(self.den_expr, self.s)
+    def _roots_robust(self, expr: sp.Expr) -> List[complex]:
+        """Raízes com multiplicidade, priorizando álgebra exata.
 
-        self.zeros = [complex(z.evalf()) for z in raizes_num.keys() for _ in range(int(raizes_num[z]))]
-        self.polos = [complex(p.evalf()) for p in raizes_den.keys() for _ in range(int(raizes_den[p]))]
+        Polinômios com coeficientes float e raízes repetidas podem fazer
+        sympy.roots cair em nroots e falhar por convergência. Como os
+        coeficientes já foram racionalizados, tentamos primeiro a solução exata
+        e usamos numpy.roots somente como fallback numérico.
+        """
+        poly = sp.Poly(expr, self.s)
+        degree = int(poly.degree())
+        if degree <= 0:
+            return []
+
+        try:
+            exact = sp.roots(poly.as_expr(), self.s)
+            if sum(int(m) for m in exact.values()) == degree:
+                result = []
+                for root, multiplicity in exact.items():
+                    z = complex(sp.N(root, 16))
+                    if abs(z.real) < 1e-12:
+                        z = complex(0.0, z.imag)
+                    if abs(z.imag) < 1e-12:
+                        z = complex(z.real, 0.0)
+                    result.extend([z] * int(multiplicity))
+                return result
+        except Exception:
+            pass
+
+        coeffs = np.asarray([complex(sp.N(c, 16)) for c in poly.all_coeffs()], dtype=complex)
+        roots = np.asarray(np.roots(coeffs), dtype=complex)
+        result = []
+        for z in roots:
+            if abs(z.real) < 1e-10:
+                z = complex(0.0, z.imag)
+            if abs(z.imag) < 1e-10:
+                z = complex(z.real, 0.0)
+            result.append(complex(z))
+        return result
+
+    def calcular_polos_zeros(self) -> Dict[str, Any]:
+        self.zeros = self._roots_robust(self.num_expr)
+        self.polos = self._roots_robust(self.den_expr)
         self.nz = len(self.zeros)
         self.np = len(self.polos)
 
