@@ -289,6 +289,12 @@ def build_controller_html(design,data):
 
     plot_html=[]
     for i,fig in enumerate(figures):
+        fig.update_layout(
+            template="plotly_white",
+            paper_bgcolor="white",
+            plot_bgcolor="white",
+            font=dict(color="#111111"),
+        )
         plot_html.append(
             pio.to_html(
                 fig,
@@ -299,7 +305,11 @@ def build_controller_html(design,data):
         )
 
     css="""
-    :root { color-scheme: light dark; }
+    :root { color-scheme: light; }
+    html, body {
+        background: #ffffff !important;
+        color: #111111 !important;
+    }
     body {
         font-family: Arial, Helvetica, sans-serif;
         max-width: 1500px; margin: 0 auto; padding: 24px;
@@ -313,7 +323,8 @@ def build_controller_html(design,data):
     .table-wrap { overflow-x: auto; margin: 12px 0 18px; }
     table { width: 100%; border-collapse: collapse; font-size: 14px; }
     th, td { border: 1px solid #aaa; padding: 7px 9px; text-align: left; }
-    th { background: rgba(128,128,128,.12); }
+    th { background: #f2f2f2; color: #111111; }
+    td { background: #ffffff; color: #111111; }
     .ok { background: rgba(44,160,44,.12); padding: 10px 12px; border-radius: 6px; margin: 10px 0; }
     .note { background: rgba(31,119,180,.12); padding: 10px 12px; border-radius: 6px; margin: 10px 0; }
     .charts { display: grid; grid-template-columns: 1fr; gap: 18px; }
