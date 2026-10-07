@@ -15,7 +15,7 @@ def _finite_points(values):
     return [complex(v) for v in values if np.isfinite(complex(v).real) and np.isfinite(complex(v).imag)]
 
 
-def _focus_ranges(points, padding=10.0):
+def _focus_ranges(points, padding=7.0):
     """Faixa inicial simétrica, ignorando ramos do LGR que tendem ao infinito."""
     pts=_finite_points(points)
     if not pts:
@@ -27,7 +27,7 @@ def _focus_ranges(points, padding=10.0):
     return [-x_bound,x_bound],[-y_bound,y_bound]
 
 
-def geometry_figure(design):
+def geometry_figure(design,padding=7.0):
     """Diagrama geométrico dos ângulos usados no ponto desejado."""
     fig=go.Figure()
     sd=complex(design.desired_pole)
@@ -80,7 +80,7 @@ def geometry_figure(design):
     fig.add_hline(y=0,line_width=1,line_color="black",opacity=.45)
     fig.add_vline(x=0,line_width=1,line_color="black",opacity=.45)
     focus_points=[c.singularity for c in allc]+[sd,sd.conjugate()]
-    xrange,yrange=_focus_ranges(focus_points,padding=10.0)
+    xrange,yrange=_focus_ranges(focus_points,padding=padding)
     fig.update_layout(
         title="Geometria da condição de ângulo",
         xaxis_title="Re(s)",yaxis_title="Im(s)",
@@ -92,7 +92,7 @@ def geometry_figure(design):
     return fig
 
 
-def root_locus_figure(num_g,den_g,num_h,den_h,desired_pole=None,controller_num=None,controller_den=None,title="LGR"):
+def root_locus_figure(num_g,den_g,num_h,den_h,desired_pole=None,controller_num=None,controller_den=None,title="LGR",padding=7.0):
     """LGR da planta original ou do sistema compensado."""
     ng=np.asarray(num_g,dtype=float)
     dg=np.asarray(den_g,dtype=float)
@@ -121,9 +121,9 @@ def root_locus_figure(num_g,den_g,num_h,den_h,desired_pole=None,controller_num=N
 
     # O LGR possui ramos que podem tender ao infinito; usar todos os pontos no
     # autorange torna a região de interesse ilegível. O enquadramento inicial
-    # usa apenas polos, zeros e polo desejado, com margem de 10 unidades.
+    # usa apenas polos, zeros e polo desejado, com margem configurável (7 por padrão).
     # Zoom, pan e autoscale do Plotly continuam disponíveis manualmente.
-    xrange,yrange=_focus_ranges(focus_points,padding=10.0)
+    xrange,yrange=_focus_ranges(focus_points,padding=padding)
     a.fig.update_layout(
         title=title,
         height=500,
