@@ -9,7 +9,11 @@ def solve_controller(data):
     designer=ControllerDesigner(
         data["num_g"],data["den_g"],data["num_h"],data["den_h"]
     )
-    return designer.design(data["controller"],data["specs"])
+    return designer.design(
+        data["controller"],
+        data["specs"],
+        auto_refine=bool(data.get("auto_refine",False)),
+    )
 
 
 def render_controller_result(design,data):
