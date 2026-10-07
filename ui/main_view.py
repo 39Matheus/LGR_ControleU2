@@ -19,6 +19,7 @@ _DEFAULTS={
     "input_ts":4.0,
     "input_band":5,
     "input_auto_refine":False,
+    "input_plot_padding":7.0,
     "input_zeta":0.7,
     "input_wn":0.5,
     "input_pole_real":-4.0,
@@ -208,6 +209,18 @@ def render_main_view():
     if st.session_state["input_mode"]=="Projeto de controlador":
         st.subheader("Parâmetros do projeto")
         st.selectbox("Controlador",["PD","PI","PID"],key="input_controller")
+        st.number_input(
+            "Margem visual dos gráficos (padding)",
+            min_value=0.0,
+            max_value=100.0,
+            step=1.0,
+            key="input_plot_padding",
+            help=(
+                "Margem adicionada ao maior módulo das partes real e imaginária "
+                "usadas no enquadramento inicial. O padrão é 7. "
+                "O limite mínimo do gráfico continua sendo ±10."
+            ),
+        )
         st.radio(
             "Especificação",
             ["Mp + ts","ξ + ωn","Polos desejados"],
@@ -252,6 +265,7 @@ def render_main_view():
                     if st.session_state["input_spec_kind"]=="Mp + ts"
                     else False
                 )
+                data["plot_padding"]=float(st.session_state["input_plot_padding"])
                 design=solve_controller(data)
                 st.session_state["last_controller_result"]=(design,data)
             except Exception as exc:
@@ -261,6 +275,7 @@ def render_main_view():
             st.markdown("---")
             st.caption("Resultado da última execução do modo Projeto de controlador.")
             design,data=st.session_state["last_controller_result"]
+            data["plot_padding"]=float(st.session_state["input_plot_padding"])
             render_controller_result(design,data)
 
     else:
