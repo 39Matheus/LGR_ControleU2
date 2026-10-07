@@ -15,19 +15,80 @@ def _finite_points(values):
     return [complex(v) for v in values if np.isfinite(complex(v).real) and np.isfinite(complex(v).imag)]
 
 
-def _focus_ranges(points, padding=7.0):
+DEFAULT_FOCUS={
+    "mode":"auto_proportional",
+    "x_percent":20.0,
+    "y_percent":10.0,
+    "x_padding":7.0,
+    "y_padding":7.0,
+}
+
+
+def normalize_focus_config(focus=None,padding=None):
+    """Normaliza a configuração do enquadramento.
+
+    O padrão é proporcional: 20% sobre o maior |Re| e 10% sobre o maior |Im|.
+    O argumento padding é mantido por compatibilidade com chamadas antigas e,
+    quando usado, seleciona margem linear igual nos dois eixos.
+    """
+    if focus is None:
+        if padding is not None:
+            value=max(0.0,float(padding))
+            return {
+                "mode":"linear",
+                "x_percent":20.0,
+                "y_percent":10.0,
+                "x_padding":value,
+                "y_padding":value,
+            }
+        return dict(DEFAULT_FOCUS)
+
+    cfg=dict(DEFAULT_FOCUS)
+    cfg.update(focus)
+    mode=str(cfg.get("mode","auto_proportional"))
+    if mode not in {"auto_proportional","proportional","linear"}:
+        mode="auto_proportional"
+    cfg["mode"]=mode
+    for key in ("x_percent","y_percent","x_padding","y_padding"):
+        cfg[key]=max(0.0,float(cfg.get(key,DEFAULT_FOCUS[key])))
+    if mode=="auto_proportional":
+        cfg["x_percent"]=20.0
+        cfg["y_percent"]=10.0
+    return cfg
+
+
+def focus_description(focus=None,padding=None):
+    cfg=normalize_focus_config(focus,padding)
+    if cfg["mode"]=="auto_proportional":
+        return "automático proporcional: +20% em x e +10% em y"
+    if cfg["mode"]=="proportional":
+        return f"proporcional: +{cfg['x_percent']:g}% em x e +{cfg['y_percent']:g}% em y"
+    return f"linear: +{cfg['x_padding']:g} em x e +{cfg['y_padding']:g} em y"
+
+
+def _focus_ranges(points,padding=None,focus=None):
     """Faixa inicial simétrica, ignorando ramos do LGR que tendem ao infinito."""
     pts=_finite_points(points)
     if not pts:
         return [-10.0,10.0],[-10.0,10.0]
+
+    cfg=normalize_focus_config(focus,padding)
     max_real=max(abs(p.real) for p in pts)
     max_imag=max(abs(p.imag) for p in pts)
-    x_bound=max(10.0,max_real+padding)
-    y_bound=max(10.0,max_imag+padding)
+
+    if cfg["mode"] in {"auto_proportional","proportional"}:
+        x_margin=max_real*cfg["x_percent"]/100.0
+        y_margin=max_imag*cfg["y_percent"]/100.0
+    else:
+        x_margin=cfg["x_padding"]
+        y_margin=cfg["y_padding"]
+
+    x_bound=max(10.0,max_real+x_margin)
+    y_bound=max(10.0,max_imag+y_margin)
     return [-x_bound,x_bound],[-y_bound,y_bound]
 
 
-def geometry_figure(design,padding=7.0):
+def geometry_figure(design,padding=None,focus=None):
     """Diagrama geométrico dos ângulos usados no ponto desejado."""
     fig=go.Figure()
     sd=complex(design.desired_pole)
@@ -80,7 +141,7 @@ def geometry_figure(design,padding=7.0):
     fig.add_hline(y=0,line_width=1,line_color="black",opacity=.45)
     fig.add_vline(x=0,line_width=1,line_color="black",opacity=.45)
     focus_points=[c.singularity for c in allc]+[sd,sd.conjugate()]
-    xrange,yrange=_focus_ranges(focus_points,padding=padding)
+    xrange,yrange=_focus_ranges(focus_points,padding=padding,focus=focus)
     fig.update_layout(
         title="Geometria da condição de ângulo",
         xaxis_title="Re(s)",yaxis_title="Im(s)",
@@ -92,7 +153,7 @@ def geometry_figure(design,padding=7.0):
     return fig
 
 
-def root_locus_figure(num_g,den_g,num_h,den_h,desired_pole=None,controller_num=None,controller_den=None,title="LGR",padding=7.0):
+def root_locus_figure(num_g,den_g,num_h,den_h,desired_pole=None,controller_num=None,controller_den=None,title="LGR",padding=None,focus=None):
     """LGR da planta original ou do sistema compensado."""
     ng=np.asarray(num_g,dtype=float)
     dg=np.asarray(den_g,dtype=float)
@@ -121,7 +182,7 @@ def root_locus_figure(num_g,den_g,num_h,den_h,desired_pole=None,controller_num=N
 
     # O LGR possui ramos que podem tender ao infinito; usar todos os pontos no
     # autorange torna a região de interesse ilegível. O enquadramento inicial
-    # usa apenas polos, zeros e polo desejado, com margem configurável (7 por padrão).
+    # usa apenas polos, zeros e polo desejado, com margem configurável.
     # Zoom, pan e autoscale do Plotly continuam disponíveis manualmente.
     xrange,yrange=_focus_ranges(focus_points,padding=padding)
     a.fig.update_layout(
