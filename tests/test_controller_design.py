@@ -1,6 +1,6 @@
 import math
 from core.controllers import ControllerDesigner
-from core.geometry import magnitude_breakdown
+from core.geometry import angle_breakdown,magnitude_breakdown
 from core.presets import EXERCISES
 
 def solve(name,auto_refine=False):
@@ -75,3 +75,17 @@ def test_q3_magnitude_breakdown_matches_manual_gain_separation():
     assert math.isclose(m["kh"],0.2,rel_tol=1e-12)
     assert math.isclose(m["kt"],7.0,rel_tol=1e-7)
     assert math.isclose(m["kc"],d.kc,rel_tol=1e-10)
+
+
+def test_angle_breakdown_exposes_labels_for_every_preset():
+    for name,x in EXERCISES.items():
+        d=solve(name)
+        info=angle_breakdown(
+            d,x["num_g"],x["den_g"],x["num_h"],x["den_h"]
+        )
+        assert "plant_ids" in info
+        assert set(info["plant_ids"])=={"zero","pole"}
+        for c in info["plant_zeros"]:
+            assert c.label in info["plant_ids"]["zero"]
+        for c in info["plant_poles"]:
+            assert c.label in info["plant_ids"]["pole"]
