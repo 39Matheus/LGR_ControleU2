@@ -114,12 +114,39 @@ def _mpl_dash(dash):
     }.get(str(dash or "solid"),"-")
 
 
+_GEOMETRY_VECTOR_COLORS=[
+    "#9467bd",  # roxo
+    "#1f77b4",  # azul
+    "#2ca02c",  # verde
+    "#ff7f0e",  # laranja
+    "#17becf",  # ciano
+    "#e377c2",  # rosa
+    "#8c564b",  # marrom
+]
+
+
+def _geometry_trace_color(name,vector_index=0):
+    """Cores explícitas usadas somente no PDF da geometria angular."""
+    normalized=str(name or "").strip().lower()
+    if normalized=="polos":
+        return "#d62728"
+    if normalized=="zeros":
+        return "#1f77b4"
+    if normalized=="polos desejados":
+        return "#ff9800"
+    return _GEOMETRY_VECTOR_COLORS[vector_index % len(_GEOMETRY_VECTOR_COLORS)]
+
+
 def _plotly_png(fig,width=7.7,height=4.6,dpi=150):
     """Renderiza os traces Plotly em Matplotlib para um PDF portátil."""
     out=BytesIO()
     mf,ax=plt.subplots(figsize=(width,height))
     mf.patch.set_facecolor("white")
     ax.set_facecolor("white")
+
+    title=getattr(getattr(fig.layout,"title",None),"text",None)
+    is_geometry=str(title or "").strip().lower()=="geometria da condição de ângulo"
+    geometry_vector_index=0
 
     for tr in fig.data:
         x=getattr(tr,"x",None)
@@ -144,6 +171,14 @@ def _plotly_png(fig,width=7.7,height=4.6,dpi=150):
         elif marker is not None and isinstance(getattr(marker,"color",None),str):
             color=_mpl_color(marker.color)
 
+        if is_geometry:
+            normalized_name=name.strip().lower()
+            if normalized_name in {"polos","zeros","polos desejados"}:
+                color=_geometry_trace_color(name)
+            else:
+                color=_geometry_trace_color(name,geometry_vector_index)
+                geometry_vector_index+=1
+
         if "lines" in mode:
             ax.plot(
                 xf,yf,label=name or None,
@@ -156,7 +191,9 @@ def _plotly_png(fig,width=7.7,height=4.6,dpi=150):
             size=float(getattr(marker,"size",7) or 7)
             marker_line=getattr(marker,"line",None) if marker is not None else None
             edge=_mpl_color(getattr(marker_line,"color",None)) if marker_line is not None else None
-            if edge is None:
+            if is_geometry and color is not None:
+                edge=color
+            elif edge is None:
                 edge=color if color is not None else "black"
             mpl_symbol=_mpl_marker(symbol)
             kwargs=dict(
@@ -187,11 +224,10 @@ def _plotly_png(fig,width=7.7,height=4.6,dpi=150):
                 if sh.x0==sh.x1:
                     ax.axvline(float(sh.x0),linewidth=float(sh.line.width or 1),linestyle=_mpl_dash(sh.line.dash),color=_mpl_color(sh.line.color) or "#777777",alpha=float(sh.opacity or 1))
                 elif sh.y0==sh.y1:
-                    ax.axhline(float(sh.y0),linewidth=float(sh.line.width or 1),linestyle=_mpl_dash(sh.line.dash),color=sh.line.color or "#777777",alpha=float(sh.opacity or 1))
+                    ax.axhline(float(sh.y0),linewidth=float(sh.line.width or 1),linestyle=_mpl_dash(sh.line.dash),color=_mpl_color(sh.line.color) or "#777777",alpha=float(sh.opacity or 1))
         except Exception:
             pass
 
-    title=getattr(getattr(fig.layout,"title",None),"text",None)
     if title:
         ax.set_title(str(title),fontsize=10)
     xt=getattr(getattr(getattr(fig.layout,"xaxis",None),"title",None),"text",None)
