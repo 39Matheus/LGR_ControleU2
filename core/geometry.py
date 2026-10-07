@@ -77,3 +77,60 @@ def singularity_contributions(num,den,sd):
         d=sd-p
         out.append(TrigContribution(f"p{i}",complex(p),float(d.real),float(d.imag),phase_deg(d),"pole"))
     return out
+
+
+def magnitude_breakdown(design,num_g,den_g,num_h,den_h):
+    """Decompõe a condição de módulo no formato usado na resolução manual.
+
+    A_i são as distâncias do polo desejado aos polos da malha aberta
+    compensada sem Kc; B_i são as distâncias aos zeros. K_T é a razão
+    produto(A_i)/produto(B_i). O ganho do controlador é obtido de
+    K_T = |K_G K_H| K_C.
+    """
+    sd=complex(design.desired_pole)
+    contributions=design.plant_contributions+design.controller_contributions
+
+    pole_terms=[]
+    zero_terms=[]
+    for c in contributions:
+        distance=abs(sd-complex(c.singularity))
+        item={
+            "source_label":c.label,
+            "singularity":complex(c.singularity),
+            "dx":float(c.dx),
+            "dy":float(c.dy),
+            "distance":float(distance),
+        }
+        if c.kind=="pole":
+            item["term"]=f"A{len(pole_terms)+1}"
+            pole_terms.append(item)
+        else:
+            item["term"]=f"B{len(zero_terms)+1}"
+            zero_terms.append(item)
+
+    prod_a=float(np.prod([x["distance"] for x in pole_terms])) if pole_terms else 1.0
+    prod_b=float(np.prod([x["distance"] for x in zero_terms])) if zero_terms else 1.0
+    kt=prod_a/prod_b
+
+    num_g=np.trim_zeros(np.asarray(num_g,dtype=float),"f")
+    den_g=np.trim_zeros(np.asarray(den_g,dtype=float),"f")
+    num_h=np.trim_zeros(np.asarray(num_h,dtype=float),"f")
+    den_h=np.trim_zeros(np.asarray(den_h,dtype=float),"f")
+    kg=float(num_g[0]/den_g[0])
+    kh=float(num_h[0]/den_h[0])
+    kgh=kg*kh
+    if abs(kgh)<1e-15:
+        raise ValueError("Ganho constante KG*KH nulo na decomposição de módulo.")
+
+    kc=kt/abs(kgh)
+    return {
+        "poles":pole_terms,
+        "zeros":zero_terms,
+        "prod_a":prod_a,
+        "prod_b":prod_b,
+        "kt":float(kt),
+        "kg":kg,
+        "kh":kh,
+        "kgh":kgh,
+        "kc":float(kc),
+    }
