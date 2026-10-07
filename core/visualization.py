@@ -184,7 +184,7 @@ def root_locus_figure(num_g,den_g,num_h,den_h,desired_pole=None,controller_num=N
     # autorange torna a região de interesse ilegível. O enquadramento inicial
     # usa apenas polos, zeros e polo desejado, com margem configurável.
     # Zoom, pan e autoscale do Plotly continuam disponíveis manualmente.
-    xrange,yrange=_focus_ranges(focus_points,padding=padding)
+    xrange,yrange=_focus_ranges(focus_points,padding=padding,focus=focus)
     a.fig.update_layout(
         title=title,
         height=500,
