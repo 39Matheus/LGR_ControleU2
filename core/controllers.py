@@ -63,24 +63,71 @@ class ControllerDesigner:
 
     def design(self,controller_type,specs,auto_refine=True):
         pole,zeta,wn,sigma=resolve_specs(specs)
-        design=self._design_at_pole(controller_type,pole,specs.settling_band)
-        summary={"zeta":float(zeta),"omega_n":float(wn),"sigma":float(sigma)}
-        if specs.mp_max is not None: summary["mp_max"]=float(specs.mp_max)
+
+        if specs.pole is not None:
+            source="pole"
+        elif specs.zeta is not None and specs.omega_n is not None:
+            source="zeta_wn"
+        else:
+            source="mp_ts"
+
+        summary={
+            "source":source,
+            "initial_pole":complex(pole),
+            "initial_zeta":float(zeta),
+            "initial_omega_n":float(wn),
+            "initial_sigma":float(sigma),
+            "initial_omega_d":float(abs(complex(pole).imag)),
+        }
+        if specs.mp_max is not None:
+            summary["mp_max"]=float(specs.mp_max)
         if specs.ts_max is not None:
-            summary["ts_max"]=float(specs.ts_max); summary["settling_band"]=float(specs.settling_band)
-        design.specification_summary=summary
+            summary["ts_max"]=float(specs.ts_max)
+            summary["settling_band"]=float(specs.settling_band)
+        if specs.zeta is not None:
+            summary["zeta_input"]=float(specs.zeta)
+        if specs.omega_n is not None:
+            summary["omega_n_input"]=float(specs.omega_n)
+        if specs.pole is not None:
+            summary["pole_input"]=complex(specs.pole)
+
+        design=self._design_at_pole(controller_type,pole,specs.settling_band)
+
         if auto_refine and specs.mp_max is not None and specs.ts_max is not None and design.metrics is not None:
-            history=[]; candidate=design; factor=1.0
+            history=[]
+            candidate=design
+            factor=1.0
             for _ in range(60):
                 m=candidate.metrics
-                history.append({"sigma":-candidate.desired_pole.real,"kc":candidate.kc,"z":candidate.zero_parameter,
+                history.append({
+                    "sigma":-candidate.desired_pole.real,
+                    "kc":candidate.kc,
+                    "z":candidate.zero_parameter,
                     "mp":float(m.overshoot_percent) if m and m.overshoot_percent is not None else math.nan,
-                    "ts":float(m.settling_time) if m and m.settling_time is not None else math.nan})
+                    "ts":float(m.settling_time) if m and m.settling_time is not None else math.nan,
+                })
                 if meets_specs(m,specs.mp_max,specs.ts_max):
-                    design=candidate; break
+                    design=candidate
+                    break
                 factor*=1.02
                 sigma_try=sigma*factor
-                candidate=self._design_at_pole(controller_type,desired_pole(zeta,sigma_try/zeta),specs.settling_band)
-                candidate.specification_summary=dict(summary)
+                candidate=self._design_at_pole(
+                    controller_type,
+                    desired_pole(zeta,sigma_try/zeta),
+                    specs.settling_band,
+                )
             design.refinement_history=history
+
+        final_pole=complex(design.desired_pole)
+        final_wn=abs(final_pole)
+        final_sigma=-final_pole.real
+        final_zeta=final_sigma/final_wn
+        summary.update({
+            "zeta":float(final_zeta),
+            "omega_n":float(final_wn),
+            "sigma":float(final_sigma),
+            "omega_d":float(abs(final_pole.imag)),
+            "adjusted":bool(abs(final_pole-complex(pole))>1e-10),
+        })
+        design.specification_summary=summary
         return design
