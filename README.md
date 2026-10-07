@@ -77,3 +77,14 @@ streamlit run app.py
 pip install pytest
 pytest -q
 ~~~
+
+
+## Exportação
+
+A resolução de projeto possui duas saídas:
+
+- **Modo Prova (PDF)**: versão compacta para transcrição manual.
+- **Resolução completa**: pode ser baixada como **HTML interativo**, com os
+  gráficos Plotly navegáveis, ou como **PDF completo**, mantendo a mesma
+  sequência de resolução com gráficos estáticos. O nome do arquivo pode ser
+  definido antes do download.
