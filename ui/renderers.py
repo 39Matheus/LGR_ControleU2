@@ -1,7 +1,7 @@
 import math
 import streamlit as st
 
-from core.geometry import magnitude_breakdown
+from core.geometry import angle_breakdown,magnitude_breakdown
 from core.visualization import geometry_figure,root_locus_figure,step_response_figure
 
 def fmt_complex(z,digits=5):
@@ -34,46 +34,8 @@ def _angle_symbol(c,plant_ids,controller_zero_count):
     return rf"\theta_{{{idx}}}"
 
 
-def _angle_breakdown(d,data):
-    plant_zeros=[c for c in d.plant_contributions if c.kind=="zero"]
-    plant_poles=[c for c in d.plant_contributions if c.kind=="pole"]
-    controller_poles=[c for c in d.controller_contributions if c.kind=="pole"]
-    controller_zeros=[c for c in d.controller_contributions if c.kind=="zero"]
-
-    kg=float(data["num_g"][0]/data["den_g"][0])
-    kh=float(data["num_h"][0]/data["den_h"][0])
-    constant_phase=180.0 if kg*kh<0 else 0.0
-
-    raw_base=(
-        constant_phase
-        +sum(c.angle_deg for c in plant_zeros)
-        -sum(c.angle_deg for c in plant_poles)
-        -sum(c.angle_deg for c in controller_poles)
-    )
-    ctrl_phase=sum(c.angle_deg for c in controller_zeros)
-    final_raw=raw_base+ctrl_phase
-    target=180.0+360.0*round((final_raw-180.0)/360.0)
-
-    plant_ids={
-        "zero":{c.label:i for i,c in enumerate(plant_zeros,1)},
-        "pole":{c.label:i for i,c in enumerate(plant_poles,1)},
-    }
-    return {
-        "plant_zeros":plant_zeros,
-        "plant_poles":plant_poles,
-        "controller_poles":controller_poles,
-        "controller_zeros":controller_zeros,
-        "constant_phase":constant_phase,
-        "raw_base":raw_base,
-        "controller_phase":ctrl_phase,
-        "final_raw":final_raw,
-        "target":target,
-        "plant_ids":plant_ids,
-    }
-
-
 def _render_angle_condition(d,data):
-    info=_angle_breakdown(d,data)
+    info=angle_breakdown(d,data["num_g"],data["den_g"],data["num_h"],data["den_h"])
     all_contrib=(
         info["plant_zeros"]
         +info["plant_poles"]
@@ -194,8 +156,8 @@ def _render_magnitude_condition(d,data):
             rf"={item['distance']:.6f}"
         )
 
-    a_prod=r"\cdot".join(item["term"] for item in m["poles"]) or "1"
-    b_prod=r"\cdot".join(item["term"] for item in m["zeros"]) or "1"
+    a_prod=r"\,\cdot\,".join(item["term"] for item in m["poles"]) or "1"
+    b_prod=r"\,\cdot\,".join(item["term"] for item in m["zeros"]) or "1"
     st.markdown("**Ganho total exigido pelo critério de módulo**")
     st.latex(
         rf"K_T=\frac{{\prod A_i}}{{\prod B_i}}"
