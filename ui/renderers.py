@@ -1,6 +1,7 @@
 import math
 import streamlit as st
 
+from core.geometry import magnitude_breakdown
 from core.visualization import geometry_figure,root_locus_figure,step_response_figure
 
 def fmt_complex(z,digits=5):
@@ -16,6 +17,207 @@ def render_trig_table(contribs):
                      "ΔRe":f"{c.dx:.5f}","ΔIm":f"{c.dy:.5f}",
                      "atan(|ΔIm/ΔRe|)":f"{base:.5f}°","ângulo":f"{c.angle_deg:.5f}°"})
     st.dataframe(rows,hide_index=True,use_container_width=True)
+
+
+def _angle_symbol(c,plant_ids,controller_zero_count):
+    if c.kind=="zero":
+        if c.label.startswith("z_c"):
+            if controller_zero_count==1:
+                return r"\phi_c"
+            idx=int(c.label.replace("z_c",""))
+            return rf"\phi_{{c{idx}}}"
+        idx=plant_ids["zero"].get(c.label,1)
+        return rf"\phi_{{{idx}}}"
+    if c.label=="p_c=0":
+        return r"\theta_c"
+    idx=plant_ids["pole"].get(c.label,1)
+    return rf"\theta_{{{idx}}}"
+
+
+def _angle_breakdown(d,data):
+    plant_zeros=[c for c in d.plant_contributions if c.kind=="zero"]
+    plant_poles=[c for c in d.plant_contributions if c.kind=="pole"]
+    controller_poles=[c for c in d.controller_contributions if c.kind=="pole"]
+    controller_zeros=[c for c in d.controller_contributions if c.kind=="zero"]
+
+    kg=float(data["num_g"][0]/data["den_g"][0])
+    kh=float(data["num_h"][0]/data["den_h"][0])
+    constant_phase=180.0 if kg*kh<0 else 0.0
+
+    raw_base=(
+        constant_phase
+        +sum(c.angle_deg for c in plant_zeros)
+        -sum(c.angle_deg for c in plant_poles)
+        -sum(c.angle_deg for c in controller_poles)
+    )
+    ctrl_phase=sum(c.angle_deg for c in controller_zeros)
+    final_raw=raw_base+ctrl_phase
+    target=180.0+360.0*round((final_raw-180.0)/360.0)
+
+    plant_ids={
+        "zero":{c.label:i for i,c in enumerate(plant_zeros,1)},
+        "pole":{c.label:i for i,c in enumerate(plant_poles,1)},
+    }
+    return {
+        "plant_zeros":plant_zeros,
+        "plant_poles":plant_poles,
+        "controller_poles":controller_poles,
+        "controller_zeros":controller_zeros,
+        "constant_phase":constant_phase,
+        "raw_base":raw_base,
+        "controller_phase":ctrl_phase,
+        "final_raw":final_raw,
+        "target":target,
+        "plant_ids":plant_ids,
+    }
+
+
+def _render_angle_condition(d,data):
+    info=_angle_breakdown(d,data)
+    all_contrib=(
+        info["plant_zeros"]
+        +info["plant_poles"]
+        +info["controller_poles"]
+        +info["controller_zeros"]
+    )
+    ncz=len(info["controller_zeros"])
+
+    rows=[]
+    for c in all_contrib:
+        symbol=_angle_symbol(c,info["plant_ids"],ncz)
+        base=90.0 if abs(c.dx)<1e-12 else math.degrees(math.atan(abs(c.dy/c.dx)))
+        rows.append({
+            "Termo":symbol.replace("\\",""),
+            "Elemento":c.label,
+            "Singularidade":fmt_complex(c.singularity),
+            "ΔRe":f"{c.dx:.5f}",
+            "ΔIm":f"{c.dy:.5f}",
+            "atan(|ΔIm/ΔRe|)":f"{base:.5f}°",
+            "ângulo usado":f"{c.angle_deg:.5f}°",
+        })
+    st.dataframe(rows,hide_index=True,use_container_width=True)
+
+    st.markdown("**Montagem do critério do ângulo**")
+    st.latex(
+        r"\sum\phi_{\mathrm{zeros}}-\sum\theta_{\mathrm{polos}}"
+        r"=(2q+1)180^\circ"
+    )
+
+    zero_terms=[f"{c.angle_deg:.5f}" for c in info["plant_zeros"]]
+    pole_terms=[f"{c.angle_deg:.5f}" for c in info["plant_poles"]+info["controller_poles"]]
+    zero_sum=" + ".join(zero_terms) if zero_terms else "0"
+    pole_sum=" + ".join(pole_terms) if pole_terms else "0"
+    gain_phase=info["constant_phase"]
+
+    if gain_phase:
+        st.latex(
+            rf"{gain_phase:.5f}+({zero_sum})-({pole_sum})"
+            rf"={info['raw_base']:.5f}^\circ"
+        )
+        st.caption("O ganho constante negativo acrescenta 180° à fase.")
+    else:
+        st.latex(
+            rf"({zero_sum})-({pole_sum})"
+            rf"={info['raw_base']:.5f}^\circ"
+        )
+
+    if ncz==1:
+        st.latex(
+            rf"{info['raw_base']:.5f}^\circ+\phi_c"
+            rf"={info['target']:.0f}^\circ"
+        )
+        st.latex(
+            rf"\phi_c={info['target']:.0f}^\circ-({info['raw_base']:.5f}^\circ)"
+            rf"={d.zero_angle_deg:.5f}^\circ"
+        )
+    else:
+        st.latex(
+            rf"{info['raw_base']:.5f}^\circ+{ncz}\phi_c"
+            rf"={info['target']:.0f}^\circ"
+        )
+        st.latex(
+            rf"\phi_c=\frac{{{info['target']:.0f}^\circ-({info['raw_base']:.5f}^\circ)}}"
+            rf"{{{ncz}}}={d.zero_angle_deg:.5f}^\circ"
+        )
+
+    st.caption(
+        f"Conferência: a soma final vale {info['final_raw']:.5f}°, "
+        "equivalente a 180° módulo 360°."
+    )
+
+    sigma=-d.desired_pole.real
+    wd=abs(d.desired_pole.imag)
+    st.markdown("**Posição do zero do controlador pela geometria**")
+    st.latex(
+        rf"\tan(\phi_c)=\frac{{\omega_d}}{{z_c-\sigma}}"
+        rf"=\frac{{{wd:.6f}}}{{z_c-{sigma:.6f}}}"
+    )
+    st.latex(
+        rf"z_c=\sigma+\frac{{\omega_d}}{{\tan(\phi_c)}}"
+        rf"={sigma:.6f}+\frac{{{wd:.6f}}}{{\tan({d.zero_angle_deg:.5f}^\circ)}}"
+        rf"={d.zero_parameter:.6f}"
+    )
+    st.success(
+        "Zero(s) do controlador: "
+        +", ".join(f"s={z:.6f}" for z in d.zero_locations)
+    )
+
+
+def _render_magnitude_condition(d,data):
+    m=magnitude_breakdown(
+        d,data["num_g"],data["den_g"],data["num_h"],data["den_h"]
+    )
+
+    st.latex(r"|G_c(s_d)G(s_d)H(s_d)|=1")
+    st.markdown(
+        "Chamando de **A** as distâncias do polo desejado aos polos e de **B** "
+        "as distâncias aos zeros:"
+    )
+
+    rows=[]
+    for item in m["poles"]+m["zeros"]:
+        rows.append({
+            "Distância":item["term"],
+            "Elemento":item["source_label"],
+            "Singularidade":fmt_complex(item["singularity"]),
+            "ΔRe":f"{item['dx']:.6f}",
+            "ΔIm":f"{item['dy']:.6f}",
+            "Módulo":f"{item['distance']:.6f}",
+        })
+    st.dataframe(rows,hide_index=True,use_container_width=True)
+
+    for item in m["poles"]+m["zeros"]:
+        term=item["term"]
+        st.latex(
+            rf"{term}=|s_d-s_{{{item['source_label']}}}|"
+            rf"=\sqrt{{({item['dx']:.6f})^2+({item['dy']:.6f})^2}}"
+            rf"={item['distance']:.6f}"
+        )
+
+    a_prod=r"\cdot".join(item["term"] for item in m["poles"]) or "1"
+    b_prod=r"\cdot".join(item["term"] for item in m["zeros"]) or "1"
+    st.markdown("**Ganho total exigido pelo critério de módulo**")
+    st.latex(
+        rf"K_T=\frac{{\prod A_i}}{{\prod B_i}}"
+        rf"=\frac{{{a_prod}}}{{{b_prod}}}"
+        rf"=\frac{{{m['prod_a']:.8g}}}{{{m['prod_b']:.8g}}}"
+        rf"={m['kt']:.8g}"
+    )
+
+    st.markdown("**Separação dos ganhos da planta, realimentação e controlador**")
+    st.latex(
+        rf"K_G=\frac{{a_{{0,G}}}}{{b_{{0,G}}}}"
+        rf"={m['kg']:.8g},\qquad "
+        rf"K_H=\frac{{a_{{0,H}}}}{{b_{{0,H}}}}"
+        rf"={m['kh']:.8g}"
+    )
+    st.latex(r"K_T=|K_GK_H|K_C")
+    st.latex(
+        rf"K_C=\frac{{K_T}}{{|K_GK_H|}}"
+        rf"=\frac{{{m['kt']:.8g}}}{{|({m['kg']:.8g})({m['kh']:.8g})|}}"
+        rf"={m['kc']:.8g}"
+    )
+    st.success(f"Kc = {d.kc:.8g}")
 
 def _render_desired_pole_derivation(d):
     s=d.specification_summary
@@ -115,20 +317,14 @@ def render_controller_design(d,data):
     st.plotly_chart(geometry_figure(d),use_container_width=True,key="geometry_controller")
 
     st.subheader("2 — Condição de ângulo")
-    st.caption("Apresentação trigonométrica; atan2 é usado internamente apenas para o quadrante correto.")
-    render_trig_table(d.plant_contributions)
-    st.latex(rf"\angle L_{{base}}={d.base_phase_deg:.6f}^\circ")
-    st.latex(rf"\phi_{{nec}}={d.required_phase_deg:.6f}^\circ")
-    if d.controller_type=="PID":
-        st.latex(rf"\phi_1=\phi_2={d.zero_angle_deg:.6f}^\circ")
-    else:
-        st.latex(rf"\phi={d.zero_angle_deg:.6f}^\circ")
-    st.latex(rf"\tan\phi=\frac{{\omega_d}}{{z-\sigma}}\Rightarrow z={d.zero_parameter:.6f}")
-    st.success("Zero(s): "+", ".join(f"s={z:.6f}" for z in d.zero_locations))
+    st.caption(
+        "Convenção usada em aula: soma dos ângulos dos zeros menos soma dos "
+        "ângulos dos polos. O atan2 é usado internamente apenas para determinar o quadrante."
+    )
+    _render_angle_condition(d,data)
 
     st.subheader("3 — Condição de módulo")
-    st.latex(r"|G_c(s_d)G(s_d)H(s_d)|=1")
-    st.latex(rf"K_c={d.kc:.8g}")
+    _render_magnitude_condition(d,data)
 
     st.subheader("4 — Controlador")
     z=d.zero_parameter
