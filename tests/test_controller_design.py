@@ -2,9 +2,13 @@ import math
 from core.controllers import ControllerDesigner
 from core.presets import EXERCISES
 
-def solve(name):
+def solve(name,auto_refine=False):
     x=EXERCISES[name]
-    return ControllerDesigner(x["num_g"],x["den_g"],x["num_h"],x["den_h"]).design(x["controller"],x["specs"]())
+    return ControllerDesigner(
+        x["num_g"],x["den_g"],x["num_h"],x["den_h"]
+    ).design(
+        x["controller"],x["specs"](),auto_refine=auto_refine
+    )
 
 def has_pole(poles,target,tol=1e-5):
     return any(abs(p-target)<tol for p in poles)
@@ -33,8 +37,16 @@ def test_q4_pid_equal_zeros():
     assert math.isclose(d.zero_locations[0],d.zero_locations[1],rel_tol=1e-12)
     assert has_pole(d.closed_loop_poles,d.desired_pole,tol=2e-5)
 
-def test_q1_full_response_after_refinement():
+def test_q1_uses_boundary_pole_by_default():
     d=solve("Questão 1 — PD (Mp e ts 5%)")
+    assert math.isclose(d.desired_pole.real,-0.75,rel_tol=1e-10)
+    assert math.isclose(d.specification_summary["initial_sigma"],0.75,rel_tol=1e-10)
+    assert not d.specification_summary["adjusted"]
+    assert d.refinement_history==[]
+
+
+def test_q1_full_response_after_optional_refinement():
+    d=solve("Questão 1 — PD (Mp e ts 5%)",auto_refine=True)
     assert d.metrics and d.metrics.stable
     assert d.metrics.overshoot_percent is None or d.metrics.overshoot_percent<=10.001
     assert d.metrics.settling_time is None or d.metrics.settling_time<4.0
