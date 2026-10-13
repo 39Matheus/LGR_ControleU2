@@ -16,6 +16,7 @@ from reportlab.platypus import (
     Spacer, Table, TableStyle,
 )
 
+from core.discretization import discretize_project
 from core.geometry import angle_breakdown, magnitude_breakdown
 from core.visualization import focus_description, geometry_figure, root_locus_figure, step_response_figure
 
@@ -348,36 +349,49 @@ def build_controller_full_pdf(design,data):
     ))
     story.append(_eq(r"\sum\phi_{\mathrm{zeros}}-\sum\theta_{\mathrm{polos}}=(2q+1)180^\circ"))
     story.append(_table(
-        ["Elemento","Tipo","Singularidade","dRe","dIm","Ângulo"],
-        [[c.label,c.kind,_fmtc(c.singularity,5),f"{c.dx:.5f}",f"{c.dy:.5f}",f"{c.angle_deg:.5f}°"] for c in allc],
-        widths=[2.0*cm,1.8*cm,3.4*cm,2.5*cm,2.5*cm,2.8*cm],
+        ["Elemento","Tipo","Papel","Singularidade","dRe","dIm","Ângulo"],
+        [[x.label,x.kind,x.role,_fmtc(x.singularity,5),f"{x.dx:.5f}",f"{x.dy:.5f}",f"{x.angle_deg:.5f}°"] for x in allc],
+        widths=[1.7*cm,1.4*cm,1.6*cm,3.0*cm,2.2*cm,2.2*cm,2.5*cm],
+        font_size=6.6,
     ))
     story.append(Spacer(1,5))
 
-    zero_sum=" + ".join(f"{c.angle_deg:.5f}" for c in info["plant_zeros"]) or "0"
-    pole_sum=" + ".join(f"{c.angle_deg:.5f}" for c in info["plant_poles"]+info["controller_poles"]) or "0"
+    base_zeros=info["plant_zeros"]+info["fixed_controller_zeros"]
+    base_poles=info["plant_poles"]+info["fixed_controller_poles"]
+    zero_sum=" + ".join(f"{x.angle_deg:.5f}" for x in base_zeros) or "0"
+    pole_sum=" + ".join(f"{x.angle_deg:.5f}" for x in base_poles) or "0"
     if info["constant_phase"]:
         story.append(_eq(rf"{info['constant_phase']:.5f}+({zero_sum})-({pole_sum})={info['raw_base']:.5f}^\circ"))
     else:
         story.append(_eq(rf"({zero_sum})-({pole_sum})={info['raw_base']:.5f}^\circ"))
-    ncz=len(info["controller_zeros"])
-    if ncz==1:
+
+    solved_kind=info["solved_kind"]
+    solved_count=info["solved_count"]
+    solved_angle=design.solved_singularity_angle_deg or 0.0
+    if solved_kind=="zero":
         story += [
-            _eq(rf"{info['raw_base']:.5f}^\circ+\phi_c={info['target']:.0f}^\circ"),
-            _eq(rf"\phi_c={design.zero_angle_deg:.5f}^\circ"),
+            _eq(rf"{info['raw_base']:.5f}^\circ+{solved_count if solved_count>1 else ''}\phi_c={info['target']:.0f}^\circ"),
+            _eq(rf"\phi_c={solved_angle:.5f}^\circ"),
         ]
-    else:
+    elif solved_kind=="pole":
         story += [
-            _eq(rf"{info['raw_base']:.5f}^\circ+{ncz}\phi_c={info['target']:.0f}^\circ"),
-            _eq(rf"\phi_c={design.zero_angle_deg:.5f}^\circ"),
+            _eq(rf"{info['raw_base']:.5f}^\circ-{solved_count if solved_count>1 else ''}\theta_c={info['target']:.0f}^\circ"),
+            _eq(rf"\theta_c={solved_angle:.5f}^\circ"),
         ]
-    sigma=-design.desired_pole.real
-    wd=abs(design.desired_pole.imag)
-    story += [
-        _eq(r"\tan(\phi_c)=\frac{\omega_d}{z_c-\sigma}"),
-        _eq(rf"z_c=\sigma+\frac{{\omega_d}}{{\tan(\phi_c)}}={sigma:.6f}+\frac{{{wd:.6f}}}{{\tan({design.zero_angle_deg:.5f}^\circ)}}={design.zero_parameter:.6f}"),
-        Paragraph("Zero(s) do controlador: "+", ".join(f"s={z:.6f}" for z in design.zero_locations),styles["body"]),
-    ]
+
+    if solved_kind in {"zero","pole"}:
+        sigma=-design.desired_pole.real
+        wd=abs(design.desired_pole.imag)
+        letter="z" if solved_kind=="zero" else "p"
+        theta=r"\phi_c" if solved_kind=="zero" else r"\theta_c"
+        story += [
+            _eq(rf"\tan({theta})=\frac{{\omega_d}}{{{letter}_c-\sigma}}"),
+            _eq(rf"{letter}_c=\sigma+\frac{{\omega_d}}{{\tan({theta})}}={design.solved_singularity_parameter:.6f}"),
+        ]
+    if design.zero_locations:
+        story.append(Paragraph("Zero(s) do controlador: "+", ".join(f"s={z:.6f}" for z in design.zero_locations),styles["body"]))
+    if design.pole_locations:
+        story.append(Paragraph("Polo(s) do controlador: "+", ".join(f"s={p:.6f}" for p in design.pole_locations),styles["body"]))
 
     mag=magnitude_breakdown(design,data["num_g"],data["den_g"],data["num_h"],data["den_h"])
     story.append(Paragraph("3 - Condição de módulo",styles["h2"]))
@@ -403,13 +417,20 @@ def build_controller_full_pdf(design,data):
     ]
 
     story.append(Paragraph("4 - Controlador",styles["h2"]))
-    z=design.zero_parameter
-    if design.controller_type=="PD":
-        story += [_eq(rf"G_c(s)={design.kc:.8g}(s+{z:.8g})"),_eq(rf"K_p={design.kp:.8g},\quad K_d={design.kd:.8g}")]
-    elif design.controller_type=="PI":
-        story += [_eq(rf"G_c(s)={design.kc:.8g}\frac{{s+{z:.8g}}}{{s}}"),_eq(rf"K_p={design.kp:.8g},\quad K_i={design.ki:.8g}")]
+    story.append(_eq(rf"G_c(s)={design.controller_latex}"))
+    upper=design.controller_type.upper()
+    if upper=="P":
+        story.append(_eq(rf"K_p={design.kp:.8g}"))
+    elif upper=="PD":
+        story.append(_eq(rf"K_p={design.kp:.8g},\quad K_d={design.kd:.8g}"))
+    elif upper=="PI":
+        story.append(_eq(rf"K_p={design.kp:.8g},\quad K_i={design.ki:.8g}"))
+    elif upper=="PID":
+        story.append(_eq(rf"K_p={design.kp:.8g},\quad K_i={design.ki:.8g},\quad K_d={design.kd:.8g}"))
     else:
-        story += [_eq(rf"G_c(s)={design.kc:.8g}\frac{{(s+{z:.8g})^2}}{{s}}"),_eq(rf"K_p={design.kp:.8g},\quad K_i={design.ki:.8g},\quad K_d={design.kd:.8g}")]
+        story.append(_eq(rf"K_c={design.kc:.8g}"))
+        if design.solved_singularity_kind=="pole" and design.solved_singularity_parameter is not None:
+            story.append(_eq(rf"a=K_c={design.kc:.8g},\quad b={design.solved_singularity_parameter:.8g}"))
 
     story.append(PageBreak())
     story.append(Paragraph("5 - Representação visual do projeto",styles["h2"]))
@@ -462,6 +483,22 @@ def build_controller_full_pdf(design,data):
             f"Ajuste fino aplicado em {len(design.refinement_history)-1} iteração(ões), mantendo xi.",
             styles["body"],
         ))
+
+    if data.get("discretize_after_design"):
+        result=data.get("discretization_result") or discretize_project(design,data)
+        story.append(Paragraph("7 - Discretização",styles["h2"]))
+        story.append(Paragraph(
+            f"Alvo: {result.target_label}; método: {result.method}; T={result.sample_time:g} s.",
+            styles["body"],
+        ))
+        story += [
+            _eq(rf"{result.target_label}={result.continuous_latex}"),
+            _eq(result.substitution_latex),
+            _eq(rf"H(z)={result.discrete_latex}"),
+        ]
+        if result.difference_equation_latex:
+            story.append(Paragraph("Equação de diferenças",styles["h3"]))
+            story.append(_eq(result.difference_equation_latex,font_size=11.5))
 
     doc.build(story)
     return buf.getvalue()
