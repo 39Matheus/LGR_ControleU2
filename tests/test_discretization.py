@@ -73,3 +73,13 @@ def test_second_list_q2_euler_complete_loop():
     for got,exp in zip(r.discrete_den,expected_den):
         assert math.isclose(got,exp,rel_tol=2e-6,abs_tol=2e-8)
     assert "y[k]" in r.difference_equation_latex
+
+
+def test_second_list_q2_display_is_normalized_and_readable():
+    d,data=_design("Lista U2.2 — Questão 2 — Genérico a/(s+b) + Euler")
+    r=discretize_project(d,data)
+    assert r.discrete_latex.startswith(r"\frac{7.599")
+    assert "10^{" not in r.discrete_latex
+    assert "10^{" not in r.continuous_latex
+    assert "5.8060837" in r.discrete_latex
+    assert "8.2243346" in r.discrete_latex
