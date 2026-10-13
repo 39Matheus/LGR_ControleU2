@@ -5,6 +5,7 @@ from core.discretization import (
     discretize_project,discretize_transfer,difference_equation_latex,
 )
 from core.presets import get_exercise
+from ui.discretization_view import coefficient_rows
 
 
 def _design(name):
@@ -83,3 +84,17 @@ def test_second_list_q2_display_is_normalized_and_readable():
     assert "10^{" not in r.continuous_latex
     assert "5.8060837" in r.discrete_latex
     assert "8.2243346" in r.discrete_latex
+
+
+def test_coefficient_table_aligns_by_power_and_hides_numeric_noise():
+    rows=coefficient_rows(
+        [7.599809886,15.19961977,1.77635684e-15],
+        [1.0,5.80608365,8.224334601,5.80608365,7.224334601],
+    )
+    assert [r["potência"] for r in rows]==["z^4","z^3","z^2","z","1"]
+    assert [r["numerador"] for r in rows]==[
+        "0","0","7.599809886","15.19961977","0"
+    ]
+    assert [r["denominador"] for r in rows]==[
+        "1","5.80608365","8.224334601","5.80608365","7.224334601"
+    ]
