@@ -7,6 +7,7 @@ from reportlab.lib.styles import ParagraphStyle,getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import Paragraph,SimpleDocTemplate,Spacer,Table,TableStyle
 
+from core.discretization import discretize_project
 from core.geometry import magnitude_breakdown
 
 def _styles():
@@ -22,7 +23,7 @@ def _fmtc(z,d=5):
     if abs(z.imag)<10**(-d): return f"{z.real:.{d}f}"
     return f"{z.real:.{d}f} {'+' if z.imag>=0 else '-'} {abs(z.imag):.{d}f}j"
 
-def build_controller_pdf(design,num_g,den_g,num_h,den_h):
+def build_controller_pdf(design,num_g,den_g,num_h,den_h,data=None):
     buf=BytesIO(); doc=SimpleDocTemplate(buf,pagesize=A4,leftMargin=1.35*cm,rightMargin=1.35*cm,topMargin=1.2*cm,bottomMargin=1.2*cm)
     title,h,b=_styles()
     st=[Paragraph(f"Projeto {design.controller_type} pelo LGR — Modo Prova",title)]
@@ -189,16 +190,36 @@ def build_controller_pdf(design,num_g,den_g,num_h,den_h):
             b,
         ),
     ]
-    z=design.zero_parameter
-    if design.controller_type=="PD": ctrl=f"Gc(s)={design.kc:.8g}(s+{z:.8g}); Kp={design.kp:.8g}; Kd={design.kd:.8g}"
-    elif design.controller_type=="PI": ctrl=f"Gc(s)={design.kc:.8g}(s+{z:.8g})/s; Kp={design.kp:.8g}; Ki={design.ki:.8g}"
-    else: ctrl=f"Gc(s)={design.kc:.8g}(s+{z:.8g})²/s; Kp={design.kp:.8g}; Ki={design.ki:.8g}; Kd={design.kd:.8g}"
+    upper=design.controller_type.upper()
+    if upper=="P":
+        ctrl=f"Gc(s)={design.controller_text}; Kp={design.kp:.8g}"
+    elif upper=="PD":
+        ctrl=f"Gc(s)={design.controller_text}; Kp={design.kp:.8g}; Kd={design.kd:.8g}"
+    elif upper=="PI":
+        ctrl=f"Gc(s)={design.controller_text}; Kp={design.kp:.8g}; Ki={design.ki:.8g}"
+    elif upper=="PID":
+        ctrl=f"Gc(s)={design.controller_text}; Kp={design.kp:.8g}; Ki={design.ki:.8g}; Kd={design.kd:.8g}"
+    else:
+        ctrl=f"Gc(s)={design.controller_text}; Kc={design.kc:.8g}"
+        if design.solved_singularity_kind=="pole" and design.solved_singularity_parameter is not None:
+            ctrl+=f"; a={design.kc:.8g}; b={design.solved_singularity_parameter:.8g}"
     st += [Paragraph("4. Controlador",h),Paragraph(ctrl,b),Paragraph("5. Verificação",h),Paragraph("Polos MF: "+"; ".join(_fmtc(p) for p in design.closed_loop_poles),b)]
     if design.metrics:
         m=design.metrics; tx=f"Estável={m.stable}"
         if m.overshoot_percent is not None: tx+=f"; Mp={m.overshoot_percent:.4f}%"
         if m.settling_time is not None: tx+=f"; ts({100*m.settling_band:.0f}%)={m.settling_time:.5f}s"
         st.append(Paragraph(tx,b))
+    if data and data.get("discretize_after_design"):
+        result=data.get("discretization_result") or discretize_project(design,data)
+        st += [
+            Paragraph("6. Discretização",h),
+            Paragraph(
+                f"Alvo={result.target_label}; método={result.method}; T={result.sample_time:g}s.",
+                b,
+            ),
+            Paragraph(f"H(z)={result.discrete_latex}",b),
+            Paragraph(f"Equação de diferenças: {result.difference_equation_latex}",b),
+        ]
     doc.build(st); return buf.getvalue()
 
 def build_lgr_pdf(a,p1,p4,p7,p8,p9,p10,ptest,point):
