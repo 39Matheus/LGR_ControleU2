@@ -76,12 +76,43 @@ def _numeric_coeffs(expr,var) -> Tuple[list,list]:
     return n.tolist(),d.tolist()
 
 
+def _format_coeff(value):
+    value=float(value)
+    if abs(value)<1e-12:
+        return "0"
+    if abs(value-round(value))<1e-10:
+        return str(int(round(value)))
+    return f"{value:.8g}"
+
+
 def _poly_latex(coeffs,var):
-    expr=sp.Poly.from_list(
-        [sp.nsimplify(float(v),rational=False,tolerance=1e-10) for v in coeffs],
-        gens=var,
-    ).as_expr()
-    return sp.latex(sp.N(sp.expand(expr),8))
+    """Polinômio legível sem reconstruir racionais gigantes a partir de floats."""
+    vals=np.asarray(coeffs,dtype=float)
+    degree=len(vals)-1
+    terms=[]
+    for i,value in enumerate(vals):
+        if abs(value)<1e-12:
+            continue
+        power=degree-i
+        sign="-" if value<0 else "+"
+        mag=abs(float(value))
+        coeff="" if power>0 and abs(mag-1.0)<1e-12 else _format_coeff(mag)
+        if power==0:
+            body=coeff or "1"
+        elif power==1:
+            body=(coeff + r"\," if coeff else "") + sp.latex(var)
+        else:
+            body=(coeff + r"\," if coeff else "") + sp.latex(var) + rf"^{{{power}}}"
+        terms.append((sign,body))
+    if not terms:
+        return "0"
+    out=""
+    for i,(sign,body) in enumerate(terms):
+        if i==0:
+            out+=("-" if sign=="-" else "")+body
+        else:
+            out+=f" {sign} {body}"
+    return out
 
 
 def transfer_latex(num,den,var):
@@ -206,9 +237,10 @@ def discretize_transfer(num,den,sample_time,method,target_label="G(s)") -> Discr
         )
     else:
         _,sub,sub_latex,substituted,num_d,den_d=_symbolic_discretize(num,den,T,key)
-        substituted_latex=sp.latex(sp.N(substituted,8))
-
-    discrete_expr=transfer_expr(num_d,den_d,z)
+        # A forma simbólica exata pode carregar enormes denominadores comuns
+        # quando os parâmetros do controlador são decimais. Para apresentação,
+        # mostramos a mesma FT já normalizada pelos coeficientes numéricos.
+        substituted_latex=transfer_latex(num_d,den_d,z)
     zeros=[complex(v) for v in np.roots(num_d)] if len(num_d)>1 else []
     poles=[complex(v) for v in np.roots(den_d)] if len(den_d)>1 else []
 
@@ -220,14 +252,14 @@ def discretize_transfer(num,den,sample_time,method,target_label="G(s)") -> Discr
         continuous_den=[float(v) for v in np.asarray(den,dtype=float)],
         discrete_num=[float(v) for v in num_d],
         discrete_den=[float(v) for v in den_d],
-        continuous_latex=sp.latex(continuous),
+        continuous_latex=transfer_latex(num,den,s),
         substitution_latex=sub_latex,
         substituted_latex=substituted_latex,
-        discrete_latex=sp.latex(sp.N(discrete_expr,8)),
+        discrete_latex=transfer_latex(num_d,den_d,z),
         difference_equation_latex=difference_equation_latex(num_d,den_d),
         poles=poles,
         zeros=zeros,
-        notes=notes,
+        notes=notes+["Coeficientes apresentados com o denominador normalizado para coeficiente líder igual a 1."],
     )
 
 
