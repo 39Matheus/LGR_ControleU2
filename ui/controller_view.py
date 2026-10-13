@@ -44,7 +44,7 @@ def render_controller_result(design,data):
             st.error(f"Falha na etapa de discretização: {exc}")
 
     pdf=build_controller_pdf(
-        design,data["num_g"],data["den_g"],data["num_h"],data["den_h"]
+        design,data["num_g"],data["den_g"],data["num_h"],data["den_h"],data=data
     )
     st.download_button(
         "Baixar resolução — Modo Prova",
