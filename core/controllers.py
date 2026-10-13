@@ -207,7 +207,9 @@ class ControllerDesigner:
         den_expr=sp.Poly.from_list(
             [sp.N(v,10) for v in den_c],gens=s
         ).as_expr()
-        controller_latex=sp.latex(sp.factor(num_expr/den_expr))
+        # Preserve a forma monica usada no projeto, em vez de deixar o SymPy
+        # reescalar numerador/denominador por uma constante arbitrária.
+        controller_latex=rf"\frac{{{sp.latex(sp.N(sp.expand(num_expr),8))}}}{{{sp.latex(sp.N(sp.expand(den_expr),8))}}}"
 
         if zeros:
             num_text="".join(_fmt_factor("zero",v) for v in zeros)
