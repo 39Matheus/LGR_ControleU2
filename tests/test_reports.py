@@ -2,6 +2,7 @@ from core.controllers import ControllerDesigner
 from core.presets import EXERCISES,get_exercise
 from reports.full_pdf import _geometry_trace_color,build_controller_full_pdf
 from reports.html import build_controller_html
+from reports.pdf import build_controller_pdf
 
 
 def _q1():
@@ -67,3 +68,30 @@ def test_second_list_report_contains_discretization():
     report=build_controller_html(design,data).decode("utf-8")
     assert "7 — Discretização" in report
     assert "Tustin" in report
+
+
+def test_second_list_q2_generic_reports_render():
+    x=get_exercise("Lista U2.2 — Questão 2 — Genérico a/(s+b) + Euler")
+    design=ControllerDesigner(
+        x["num_g"],x["den_g"],x["num_h"],x["den_h"]
+    ).design(
+        x["controller"],x["specs"](),
+        controller_config=x.get("controller_config"),
+    )
+    data=dict(x)
+    data["specs"]=x["specs"]()
+    data["plot_focus"]={"mode":"auto_proportional"}
+
+    html=build_controller_html(design,data).decode("utf-8")
+    assert "7 — Discretização" in html
+    assert "Euler / Forward" in html
+    assert "a=K_c" in html
+
+    full_pdf=build_controller_full_pdf(design,data)
+    assert full_pdf.startswith(b"%PDF")
+    assert len(full_pdf)>50000
+
+    proof_pdf=build_controller_pdf(
+        design,x["num_g"],x["den_g"],x["num_h"],x["den_h"],data=data
+    )
+    assert proof_pdf.startswith(b"%PDF")
