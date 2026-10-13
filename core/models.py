@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+
 @dataclass
 class TrigContribution:
     label: str
@@ -9,6 +10,8 @@ class TrigContribution:
     dy: float
     angle_deg: float
     kind: str
+    role: str="plant"
+
 
 @dataclass
 class SimulationMetrics:
@@ -18,6 +21,7 @@ class SimulationMetrics:
     overshoot_percent: Optional[float]=None
     settling_time: Optional[float]=None
     settling_band: Optional[float]=None
+
 
 @dataclass
 class ControllerDesign:
@@ -40,3 +44,32 @@ class ControllerDesign:
     metrics: Optional[SimulationMetrics]=None
     refinement_history: List[Dict[str,float]]=field(default_factory=list)
     specification_summary: Dict[str,Any]=field(default_factory=dict)
+
+    # Extensões para controladores genéricos / PID com zeros distintos.
+    pole_locations: List[float]=field(default_factory=list)
+    solved_singularity_kind: str="zero"
+    solved_singularity_parameter: Optional[float]=None
+    solved_singularity_angle_deg: Optional[float]=None
+    solved_singularity_count: int=1
+    controller_latex: str=""
+    controller_text: str=""
+    controller_config: Dict[str,Any]=field(default_factory=dict)
+
+
+@dataclass
+class DiscretizationResult:
+    method: str
+    sample_time: float
+    target_label: str
+    continuous_num: List[float]
+    continuous_den: List[float]
+    discrete_num: List[float]
+    discrete_den: List[float]
+    continuous_latex: str
+    substitution_latex: str
+    substituted_latex: str
+    discrete_latex: str
+    difference_equation_latex: str
+    poles: List[complex]=field(default_factory=list)
+    zeros: List[complex]=field(default_factory=list)
+    notes: List[str]=field(default_factory=list)
