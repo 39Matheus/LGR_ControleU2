@@ -11,6 +11,27 @@ _METHOD_OPTIONS=[
 ]
 
 
+def coefficient_rows(num,den,tol=1e-12):
+    """Alinha numerador e denominador pela mesma potência de z."""
+    num=[0.0 if abs(float(v))<tol else float(v) for v in num]
+    den=[0.0 if abs(float(v))<tol else float(v) for v in den]
+    degree=max(len(num),len(den))-1
+    num=[0.0]*(degree+1-len(num))+num
+    den=[0.0]*(degree+1-len(den))+den
+
+    rows=[]
+    for i,(bn,an) in enumerate(zip(num,den)):
+        power=degree-i
+        rows.append({
+            "potência":f"z^{power}" if power!=1 else ("z" if power==1 else "1"),
+            "numerador":f"{bn:.10g}",
+            "denominador":f"{an:.10g}",
+        })
+    if rows:
+        rows[-1]["potência"]="1"
+    return rows
+
+
 def render_discretization_result(result,heading="7 — Discretização"):
     st.subheader(heading)
     st.write(f"**Alvo:** {result.target_label}")
@@ -33,20 +54,8 @@ def render_discretization_result(result,heading="7 — Discretização"):
     st.markdown("**Função discretizada**")
     st.latex(rf"H(z)={result.discrete_latex}")
 
-    rows=[]
-    n=max(len(result.discrete_num),len(result.discrete_den))
-    for i in range(n):
-        rows.append({
-            "índice":i,
-            "numerador":(
-                f"{result.discrete_num[i]:.10g}"
-                if i<len(result.discrete_num) else ""
-            ),
-            "denominador":(
-                f"{result.discrete_den[i]:.10g}"
-                if i<len(result.discrete_den) else ""
-            ),
-        })
+    st.markdown("**Coeficientes alinhados pela potência de z**")
+    rows=coefficient_rows(result.discrete_num,result.discrete_den)
     st.dataframe(rows,hide_index=True,use_container_width=True)
 
     if result.difference_equation_latex:
