@@ -8,7 +8,7 @@ from reportlab.lib.units import cm
 from reportlab.platypus import Paragraph,SimpleDocTemplate,Spacer,Table,TableStyle
 
 from core.discretization import discretize_project
-from core.geometry import magnitude_breakdown
+from core.geometry import angle_breakdown,magnitude_breakdown
 
 def _styles():
     s=getSampleStyleSheet()
@@ -86,22 +86,8 @@ def build_controller_pdf(design,num_g,den_g,num_h,den_h,data=None):
             )
         ]
 
-    plant_zeros=[c for c in design.plant_contributions if c.kind=="zero"]
-    plant_poles=[c for c in design.plant_contributions if c.kind=="pole"]
-    controller_poles=[c for c in design.controller_contributions if c.kind=="pole"]
-    controller_zeros=[c for c in design.controller_contributions if c.kind=="zero"]
-    kg=float(num_g[0]/den_g[0]); kh=float(num_h[0]/den_h[0])
-    gain_phase=180.0 if kg*kh<0 else 0.0
-    raw_base=(
-        gain_phase
-        +sum(c.angle_deg for c in plant_zeros)
-        -sum(c.angle_deg for c in plant_poles)
-        -sum(c.angle_deg for c in controller_poles)
-    )
-    ctrl_phase=sum(c.angle_deg for c in controller_zeros)
-    final_phase=raw_base+ctrl_phase
-    target=180.0+360.0*round((final_phase-180.0)/360.0)
-
+    info=angle_breakdown(design,num_g,den_g,num_h,den_h)
+    allc=info["plant_zeros"]+info["plant_poles"]+info["controller_poles"]+info["controller_zeros"]
     st += [
         Paragraph("2. Condição de ângulo — trigonometria",h),
         Paragraph(
@@ -109,42 +95,49 @@ def build_controller_pdf(design,num_g,den_g,num_h,den_h,data=None):
             b,
         ),
     ]
-    rows=[["Elemento","tipo","dRe","dIm","ângulo (graus)"]]+[
-        [c.label,c.kind,f"{c.dx:.5f}",f"{c.dy:.5f}",f"{c.angle_deg:.5f}"]
-        for c in design.plant_contributions+design.controller_contributions
+    rows=[["Elemento","tipo","papel","dRe","dIm","ângulo"]]+[
+        [x.label,x.kind,x.role,f"{x.dx:.5f}",f"{x.dy:.5f}",f"{x.angle_deg:.5f}"]
+        for x in allc
     ]
     t=Table(rows,hAlign="LEFT")
     t.setStyle(TableStyle([
         ("GRID",(0,0),(-1,-1),0.3,colors.grey),
         ("BACKGROUND",(0,0),(-1,0),colors.lightgrey),
-        ("FONTSIZE",(0,0),(-1,-1),7.5),
+        ("FONTSIZE",(0,0),(-1,-1),7.0),
     ]))
     st += [t,Spacer(1,4)]
     st.append(Paragraph(
-        f"Fase sem os zeros do controlador = {raw_base:.5f} graus. "
-        f"Contribuição total necessária dos zeros do controlador = "
-        f"{target-raw_base:.5f} graus.",
+        f"Fase base (incluindo singularidades fixas do controlador) = "
+        f"{info['raw_base']:.5f} graus.",
         b,
     ))
-    if len(controller_zeros)==1:
+    solved_kind=info["solved_kind"]
+    count=info["solved_count"]
+    angle=design.solved_singularity_angle_deg or 0.0
+    if solved_kind=="zero":
         st.append(Paragraph(
-            f"{raw_base:.5f} + phi_c = {target:.0f} -> "
-            f"phi_c={design.zero_angle_deg:.5f} graus.",
+            f"{info['raw_base']:.5f} + {count if count>1 else ''}phi_c = "
+            f"{info['target']:.0f}; phi_c={angle:.5f} graus.",
+            b,
+        ))
+        st.append(Paragraph(
+            f"zc=sigma+wd/tan(phi_c)={design.solved_singularity_parameter:.8g}.",
+            b,
+        ))
+    elif solved_kind=="pole":
+        st.append(Paragraph(
+            f"{info['raw_base']:.5f} - {count if count>1 else ''}theta_c = "
+            f"{info['target']:.0f}; theta_c={angle:.5f} graus.",
+            b,
+        ))
+        st.append(Paragraph(
+            f"pc=sigma+wd/tan(theta_c)={design.solved_singularity_parameter:.8g}.",
             b,
         ))
     else:
-        st.append(Paragraph(
-            f"{raw_base:.5f} + {len(controller_zeros)} phi_c = {target:.0f} -> "
-            f"phi_c={design.zero_angle_deg:.5f} graus.",
-            b,
-        ))
+        st.append(Paragraph("As singularidades fixas já satisfazem o critério de ângulo.",b))
     st.append(Paragraph(
-        f"tan(phi_c)=wd/(zc-sigma) -> "
-        f"zc=sigma+wd/tan(phi_c)={design.zero_parameter:.8g}.",
-        b,
-    ))
-    st.append(Paragraph(
-        f"Conferência da fase: {final_phase:.5f} graus, equivalente a "
+        f"Conferência da fase: {info['final_raw']:.5f} graus, equivalente a "
         "180 graus módulo 360.",
         b,
     ))
