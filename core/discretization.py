@@ -73,6 +73,10 @@ def _numeric_coeffs(expr,var) -> Tuple[list,list]:
         raise ValueError("Denominador discreto degenerado.")
     n=n/d[0]
     d=d/d[0]
+    # A normalização pode reamplificar resíduos que eram minúsculos antes da
+    # divisão; limpe novamente para não exibir 1e-15 no lugar de zero.
+    n[np.abs(n)<1e-12]=0.0
+    d[np.abs(d)<1e-12]=0.0
     return n.tolist(),d.tolist()
 
 
