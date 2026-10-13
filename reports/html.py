@@ -4,6 +4,7 @@ from io import StringIO
 
 import plotly.io as pio
 
+from core.discretization import discretize_project
 from core.geometry import angle_breakdown,magnitude_breakdown
 from core.visualization import focus_description,geometry_figure,root_locus_figure,step_response_figure
 
@@ -108,72 +109,61 @@ def _angle_section(design,data):
         info["plant_zeros"]+info["plant_poles"]
         +info["controller_poles"]+info["controller_zeros"]
     )
-    rows=[]
-    for c in allc:
-        rows.append([
-            c.label,c.kind,_fmtc(c.singularity,5),
-            f"{c.dx:.6f}",f"{c.dy:.6f}",f"{c.angle_deg:.6f}°",
-        ])
-
-    zero_sum=" + ".join(f"{c.angle_deg:.5f}" for c in info["plant_zeros"]) or "0"
-    pole_sum=" + ".join(
-        f"{c.angle_deg:.5f}" for c in info["plant_poles"]+info["controller_poles"]
-    ) or "0"
-    ncz=len(info["controller_zeros"])
+    rows=[
+        [x.label,x.kind,x.role,_fmtc(x.singularity,5),
+         f"{x.dx:.6f}",f"{x.dy:.6f}",f"{x.angle_deg:.6f}°"]
+        for x in allc
+    ]
+    base_zeros=info["plant_zeros"]+info["fixed_controller_zeros"]
+    base_poles=info["plant_poles"]+info["fixed_controller_poles"]
+    zero_sum=" + ".join(f"{x.angle_deg:.5f}" for x in base_zeros) or "0"
+    pole_sum=" + ".join(f"{x.angle_deg:.5f}" for x in base_poles) or "0"
 
     parts=[
         "<section><h2>2 — Condição de ângulo</h2>",
-        "<p>Convenção usada: soma dos ângulos dos zeros menos soma dos ângulos dos polos.</p>",
+        "<p>Convenção: soma dos ângulos dos zeros menos soma dos ângulos dos polos.</p>",
         _math(r"\sum\phi_{\mathrm{zeros}}-\sum\theta_{\mathrm{polos}}=(2q+1)180^\circ"),
-        _table(
-            ["Elemento","Tipo","Singularidade","ΔRe","ΔIm","Ângulo"],
-            rows,
-        ),
+        _table(["Elemento","Tipo","Papel","Singularidade","ΔRe","ΔIm","Ângulo"],rows),
     ]
-
     if info["constant_phase"]:
         parts.append(_math(
-            rf"{info['constant_phase']:.5f}+({zero_sum})-({pole_sum})"
-            rf"={info['raw_base']:.5f}^\circ"
+            rf"{info['constant_phase']:.5f}+({zero_sum})-({pole_sum})={info['raw_base']:.5f}^\circ"
         ))
     else:
-        parts.append(_math(
-            rf"({zero_sum})-({pole_sum})={info['raw_base']:.5f}^\circ"
-        ))
+        parts.append(_math(rf"({zero_sum})-({pole_sum})={info['raw_base']:.5f}^\circ"))
 
-    if ncz==1:
+    kind=info["solved_kind"]
+    count=info["solved_count"]
+    angle=design.solved_singularity_angle_deg or 0.0
+    if kind=="zero":
         parts.append(_math(
-            rf"{info['raw_base']:.5f}^\circ+\phi_c={info['target']:.0f}^\circ"
+            rf"{info['raw_base']:.5f}^\circ+{count if count>1 else ''}\phi_c={info['target']:.0f}^\circ"
         ))
+        parts.append(_math(rf"\phi_c={angle:.5f}^\circ"))
+    elif kind=="pole":
         parts.append(_math(
-            rf"\phi_c={design.zero_angle_deg:.5f}^\circ"
+            rf"{info['raw_base']:.5f}^\circ-{count if count>1 else ''}\theta_c={info['target']:.0f}^\circ"
         ))
+        parts.append(_math(rf"\theta_c={angle:.5f}^\circ"))
     else:
-        parts.append(_math(
-            rf"{info['raw_base']:.5f}^\circ+{ncz}\phi_c={info['target']:.0f}^\circ"
-        ))
-        parts.append(_math(
-            rf"\phi_c={design.zero_angle_deg:.5f}^\circ"
-        ))
+        parts.append("<div class='ok'>As singularidades fixas já satisfazem a condição de ângulo.</div>")
 
-    sigma=-design.desired_pole.real
-    wd=abs(design.desired_pole.imag)
-    parts.append(_math(
-        rf"\tan(\phi_c)=\frac{{\omega_d}}{{z_c-\sigma}}"
-    ))
-    parts.append(_math(
-        rf"z_c=\sigma+\frac{{\omega_d}}{{\tan(\phi_c)}}"
-        rf"={sigma:.6f}+\frac{{{wd:.6f}}}{{\tan({design.zero_angle_deg:.5f}^\circ)}}"
-        rf"={design.zero_parameter:.6f}"
-    ))
-    parts.append(
-        f"<div class='ok'>Zero(s) do controlador: "
-        +", ".join(escape(f"s={z:.6f}") for z in design.zero_locations)
-        +"</div>"
-    )
+    if kind in {"zero","pole"}:
+        sigma=-design.desired_pole.real
+        wd=abs(design.desired_pole.imag)
+        letter="z" if kind=="zero" else "p"
+        theta=r"\phi_c" if kind=="zero" else r"\theta_c"
+        parts.append(_math(rf"\tan({theta})=\frac{{\omega_d}}{{{letter}_c-\sigma}}"))
+        parts.append(_math(
+            rf"{letter}_c=\sigma+\frac{{\omega_d}}{{\tan({theta})}}"
+            rf"={design.solved_singularity_parameter:.6f}"
+        ))
+    if design.zero_locations:
+        parts.append("<div class='ok'>Zeros do controlador: "+", ".join(escape(f"s={x:.6f}") for x in design.zero_locations)+"</div>")
+    if design.pole_locations:
+        parts.append("<div class='ok'>Polos do controlador: "+", ".join(escape(f"s={x:.6f}") for x in design.pole_locations)+"</div>")
     parts.append("</section>")
     return "".join(parts)
-
 
 def _magnitude_section(design,data):
     m=magnitude_breakdown(
@@ -224,22 +214,47 @@ def _magnitude_section(design,data):
 
 
 def _controller_section(design):
-    z=design.zero_parameter
     parts=["<section><h2>4 — Controlador</h2>"]
-    if design.controller_type=="PD":
-        parts.append(_math(rf"G_c(s)={design.kc:.8g}(s+{z:.8g})"))
+    parts.append(_math(rf"G_c(s)={design.controller_latex}"))
+    upper=design.controller_type.upper()
+    if upper=="P":
+        parts.append(_math(rf"K_p={design.kp:.8g}"))
+    elif upper=="PD":
         parts.append(_math(rf"K_p={design.kp:.8g},\qquad K_d={design.kd:.8g}"))
-    elif design.controller_type=="PI":
-        parts.append(_math(rf"G_c(s)={design.kc:.8g}\frac{{s+{z:.8g}}}{{s}}"))
+    elif upper=="PI":
         parts.append(_math(rf"K_p={design.kp:.8g},\qquad K_i={design.ki:.8g}"))
-    else:
-        parts.append(_math(rf"G_c(s)={design.kc:.8g}\frac{{(s+{z:.8g})^2}}{{s}}"))
+    elif upper=="PID":
         parts.append(_math(
             rf"K_p={design.kp:.8g},\qquad K_i={design.ki:.8g},\qquad K_d={design.kd:.8g}"
         ))
+    else:
+        parts.append(_math(rf"K_c={design.kc:.8g}"))
+        if design.solved_singularity_kind=="pole" and design.solved_singularity_parameter is not None:
+            parts.append(_math(
+                rf"a=K_c={design.kc:.8g},\qquad b={design.solved_singularity_parameter:.8g}"
+            ))
     parts.append("</section>")
     return "".join(parts)
 
+
+def _discretization_section(design,data):
+    if not data.get("discretize_after_design"):
+        return ""
+    result=data.get("discretization_result") or discretize_project(design,data)
+    parts=[
+        "<section><h2>7 — Discretização</h2>",
+        f"<p><b>Alvo:</b> {escape(result.target_label)} &nbsp; "
+        f"<b>Método:</b> {escape(result.method)} &nbsp; "
+        f"<b>T:</b> {result.sample_time:g} s</p>",
+        _math(rf"{result.target_label}={result.continuous_latex}"),
+        _math(result.substitution_latex),
+        _math(rf"H(z)={result.discrete_latex}"),
+    ]
+    if result.difference_equation_latex:
+        parts.append("<h3>Equação de diferenças</h3>")
+        parts.append(_math(result.difference_equation_latex))
+    parts.append("</section>")
+    return "".join(parts)
 
 def _verification_section(design):
     rows=[[_fmtc(p,6)] for p in sorted(design.closed_loop_poles,key=lambda x:(x.real,x.imag))]
@@ -366,6 +381,7 @@ def build_controller_html(design,data):
         _controller_section(design),
         "".join(chart_block),
         _verification_section(design),
+        _discretization_section(design,data),
         "</body></html>",
     ]
     return "".join(html_parts).encode("utf-8")
