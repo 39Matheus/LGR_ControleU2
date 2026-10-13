@@ -3,10 +3,12 @@ import re
 import streamlit as st
 
 from core.controllers import ControllerDesigner
+from core.discretization import discretize_project
 from reports.full_pdf import build_controller_full_pdf
 from reports.html import build_controller_html
 from reports.pdf import build_controller_pdf
 from .renderers import render_controller_design
+from .discretization_view import render_discretization_result
 
 
 def solve_controller(data):
@@ -17,6 +19,7 @@ def solve_controller(data):
         data["controller"],
         data["specs"],
         auto_refine=bool(data.get("auto_refine",False)),
+        controller_config=data.get("controller_config"),
     )
 
 
@@ -31,6 +34,15 @@ def _safe_filename(name,default):
 
 def render_controller_result(design,data):
     render_controller_design(design,data)
+
+    if data.get("discretize_after_design"):
+        try:
+            discrete=discretize_project(design,data)
+            data["discretization_result"]=discrete
+            render_discretization_result(discrete,heading="7 — Discretização")
+        except Exception as exc:
+            st.error(f"Falha na etapa de discretização: {exc}")
+
     pdf=build_controller_pdf(
         design,data["num_g"],data["den_g"],data["num_h"],data["den_h"]
     )
