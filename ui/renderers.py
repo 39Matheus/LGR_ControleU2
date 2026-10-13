@@ -19,17 +19,16 @@ def render_trig_table(contribs):
     st.dataframe(rows,hide_index=True,use_container_width=True)
 
 
-def _angle_symbol(c,plant_ids,controller_zero_count):
+def _angle_symbol(c,plant_ids):
+    if c.label.startswith("z_c"):
+        idx=c.label.replace("z_c","")
+        return r"\phi_c" if c.role=="solved" else rf"\phi_{{c{idx},fixo}}"
+    if c.label.startswith("p_c") or c.label=="p_c=0":
+        idx="0" if c.label=="p_c=0" else c.label.replace("p_c","")
+        return r"\theta_c" if c.role=="solved" else rf"\theta_{{c{idx},fixo}}"
     if c.kind=="zero":
-        if c.label.startswith("z_c"):
-            if controller_zero_count==1:
-                return r"\phi_c"
-            idx=int(c.label.replace("z_c",""))
-            return rf"\phi_{{c{idx}}}"
         idx=plant_ids["zero"].get(c.label,1)
         return rf"\phi_{{{idx}}}"
-    if c.label=="p_c=0":
-        return r"\theta_c"
     idx=plant_ids["pole"].get(c.label,1)
     return rf"\theta_{{{idx}}}"
 
@@ -42,20 +41,20 @@ def _render_angle_condition(d,data):
         +info["controller_poles"]
         +info["controller_zeros"]
     )
-    ncz=len(info["controller_zeros"])
 
     rows=[]
-    for c in all_contrib:
-        symbol=_angle_symbol(c,info["plant_ids"],ncz)
-        base=90.0 if abs(c.dx)<1e-12 else math.degrees(math.atan(abs(c.dy/c.dx)))
+    for contrib in all_contrib:
+        symbol=_angle_symbol(contrib,info["plant_ids"])
+        base=90.0 if abs(contrib.dx)<1e-12 else math.degrees(math.atan(abs(contrib.dy/contrib.dx)))
         rows.append({
             "Termo":symbol.replace("\\",""),
-            "Elemento":c.label,
-            "Singularidade":fmt_complex(c.singularity),
-            "ΔRe":f"{c.dx:.5f}",
-            "ΔIm":f"{c.dy:.5f}",
+            "Elemento":contrib.label,
+            "Papel":contrib.role,
+            "Singularidade":fmt_complex(contrib.singularity),
+            "ΔRe":f"{contrib.dx:.5f}",
+            "ΔIm":f"{contrib.dy:.5f}",
             "atan(|ΔIm/ΔRe|)":f"{base:.5f}°",
-            "ângulo usado":f"{c.angle_deg:.5f}°",
+            "ângulo usado":f"{contrib.angle_deg:.5f}°",
         })
     st.dataframe(rows,hide_index=True,use_container_width=True)
 
@@ -65,8 +64,10 @@ def _render_angle_condition(d,data):
         r"=(2q+1)180^\circ"
     )
 
-    zero_terms=[f"{c.angle_deg:.5f}" for c in info["plant_zeros"]]
-    pole_terms=[f"{c.angle_deg:.5f}" for c in info["plant_poles"]+info["controller_poles"]]
+    base_zeros=info["plant_zeros"]+info["fixed_controller_zeros"]
+    base_poles=info["plant_poles"]+info["fixed_controller_poles"]
+    zero_terms=[f"{x.angle_deg:.5f}" for x in base_zeros]
+    pole_terms=[f"{x.angle_deg:.5f}" for x in base_poles]
     zero_sum=" + ".join(zero_terms) if zero_terms else "0"
     pole_sum=" + ".join(pole_terms) if pole_terms else "0"
     gain_phase=info["constant_phase"]
@@ -83,46 +84,69 @@ def _render_angle_condition(d,data):
             rf"={info['raw_base']:.5f}^\circ"
         )
 
-    if ncz==1:
+    solved_kind=info["solved_kind"]
+    count=info["solved_count"]
+    angle=d.solved_singularity_angle_deg or 0.0
+
+    if solved_kind=="zero":
         st.latex(
-            rf"{info['raw_base']:.5f}^\circ+\phi_c"
+            rf"{info['raw_base']:.5f}^\circ+{count if count>1 else ''}\phi_c"
             rf"={info['target']:.0f}^\circ"
         )
+        if count>1:
+            st.latex(
+                rf"\phi_c=\frac{{{info['target']:.0f}^\circ-({info['raw_base']:.5f}^\circ)}}"
+                rf"{{{count}}}={angle:.5f}^\circ"
+            )
+        else:
+            st.latex(
+                rf"\phi_c={info['target']:.0f}^\circ-({info['raw_base']:.5f}^\circ)"
+                rf"={angle:.5f}^\circ"
+            )
+    elif solved_kind=="pole":
         st.latex(
-            rf"\phi_c={info['target']:.0f}^\circ-({info['raw_base']:.5f}^\circ)"
-            rf"={d.zero_angle_deg:.5f}^\circ"
+            rf"{info['raw_base']:.5f}^\circ-{count if count>1 else ''}\theta_c"
+            rf"={info['target']:.0f}^\circ"
         )
+        if count>1:
+            st.latex(
+                rf"\theta_c=\frac{{{info['raw_base']:.5f}^\circ-{info['target']:.0f}^\circ}}"
+                rf"{{{count}}}={angle:.5f}^\circ"
+            )
+        else:
+            st.latex(
+                rf"\theta_c={info['raw_base']:.5f}^\circ-{info['target']:.0f}^\circ"
+                rf"={angle:.5f}^\circ"
+            )
     else:
-        st.latex(
-            rf"{info['raw_base']:.5f}^\circ+{ncz}\phi_c"
-            rf"={info['target']:.0f}^\circ"
-        )
-        st.latex(
-            rf"\phi_c=\frac{{{info['target']:.0f}^\circ-({info['raw_base']:.5f}^\circ)}}"
-            rf"{{{ncz}}}={d.zero_angle_deg:.5f}^\circ"
-        )
+        st.success("As singularidades fixas já satisfazem o critério de ângulo; resta apenas o ganho.")
 
     st.caption(
         f"Conferência: a soma final vale {info['final_raw']:.5f}°, "
         "equivalente a 180° módulo 360°."
     )
 
-    sigma=-d.desired_pole.real
-    wd=abs(d.desired_pole.imag)
-    st.markdown("**Posição do zero do controlador pela geometria**")
-    st.latex(
-        rf"\tan(\phi_c)=\frac{{\omega_d}}{{z_c-\sigma}}"
-        rf"=\frac{{{wd:.6f}}}{{z_c-{sigma:.6f}}}"
-    )
-    st.latex(
-        rf"z_c=\sigma+\frac{{\omega_d}}{{\tan(\phi_c)}}"
-        rf"={sigma:.6f}+\frac{{{wd:.6f}}}{{\tan({d.zero_angle_deg:.5f}^\circ)}}"
-        rf"={d.zero_parameter:.6f}"
-    )
-    st.success(
-        "Zero(s) do controlador: "
-        +", ".join(f"s={z:.6f}" for z in d.zero_locations)
-    )
+    if solved_kind in {"zero","pole"}:
+        sigma=-d.desired_pole.real
+        wd=abs(d.desired_pole.imag)
+        letter="z" if solved_kind=="zero" else "p"
+        theta=r"\phi_c" if solved_kind=="zero" else r"\theta_c"
+        title="zero" if solved_kind=="zero" else "polo"
+        st.markdown(f"**Posição do {title} incógnito do controlador pela geometria**")
+        st.latex(
+            rf"\tan({theta})=\frac{{\omega_d}}{{{letter}_c-\sigma}}"
+            rf"=\frac{{{wd:.6f}}}{{{letter}_c-{sigma:.6f}}}"
+        )
+        st.latex(
+            rf"{letter}_c=\sigma+\frac{{\omega_d}}{{\tan({theta})}}"
+            rf"={sigma:.6f}+\frac{{{wd:.6f}}}{{\tan({angle:.5f}^\circ)}}"
+            rf"={d.solved_singularity_parameter:.6f}"
+        )
+
+    if d.zero_locations:
+        st.success("Zero(s) do controlador: "+", ".join(f"s={z:.6f}" for z in d.zero_locations))
+    if d.pole_locations:
+        st.success("Polo(s) do controlador: "+", ".join(f"s={p:.6f}" for p in d.pole_locations))
 
 
 def _render_magnitude_condition(d,data):
@@ -290,16 +314,24 @@ def render_controller_design(d,data):
     _render_magnitude_condition(d,data)
 
     st.subheader("4 — Controlador")
-    z=d.zero_parameter
-    if d.controller_type=="PD":
-        st.latex(rf"G_c(s)={d.kc:.8g}(s+{z:.8g})")
+    st.latex(rf"G_c(s)={d.controller_latex}")
+    upper=d.controller_type.upper()
+    if upper=="P":
+        st.latex(rf"K_p={d.kp:.8g}")
+    elif upper=="PD":
         st.latex(rf"K_p={d.kp:.8g},\quad K_d={d.kd:.8g}")
-    elif d.controller_type=="PI":
-        st.latex(rf"G_c(s)={d.kc:.8g}\frac{{s+{z:.8g}}}{{s}}")
+    elif upper=="PI":
         st.latex(rf"K_p={d.kp:.8g},\quad K_i={d.ki:.8g}")
-    else:
-        st.latex(rf"G_c(s)={d.kc:.8g}\frac{{(s+{z:.8g})^2}}{{s}}")
+    elif upper=="PID":
         st.latex(rf"K_p={d.kp:.8g},\quad K_i={d.ki:.8g},\quad K_d={d.kd:.8g}")
+        if len(d.zero_locations)==2 and abs(d.zero_locations[0]-d.zero_locations[1])>1e-8:
+            st.caption("PID projetado com zeros reais distintos.")
+    else:
+        st.latex(rf"K_c={d.kc:.8g}")
+        if d.solved_singularity_kind=="pole" and d.solved_singularity_parameter is not None:
+            st.latex(
+                rf"a=K_c={d.kc:.8g},\qquad b={d.solved_singularity_parameter:.8g}"
+            )
 
     st.subheader("5 — Representação visual do projeto")
     st.caption(
