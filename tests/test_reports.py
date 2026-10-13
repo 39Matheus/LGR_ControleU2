@@ -1,11 +1,11 @@
 from core.controllers import ControllerDesigner
-from core.presets import EXERCISES
+from core.presets import EXERCISES,get_exercise
 from reports.full_pdf import _geometry_trace_color,build_controller_full_pdf
 from reports.html import build_controller_html
 
 
 def _q1():
-    x=EXERCISES["Questão 1 — PD (Mp e ts 5%)"]
+    x=get_exercise("Questão 1 — PD (Mp e ts 5%)")
     d=ControllerDesigner(
         x["num_g"],x["den_g"],x["num_h"],x["den_h"]
     ).design(x["controller"],x["specs"](),auto_refine=False)
@@ -51,3 +51,19 @@ def test_pdf_geometry_uses_explicit_colors():
     assert _geometry_trace_color("Polos desejados")=="#ff9800"
     assert _geometry_trace_color("p1: 30.00°",0)!="#000000"
     assert _geometry_trace_color("p2: 40.00°",1)!=_geometry_trace_color("p1: 30.00°",0)
+
+
+def test_second_list_report_contains_discretization():
+    x=get_exercise("Lista U2.2 — Questão 1 — PID + Tustin")
+    design=ControllerDesigner(
+        x["num_g"],x["den_g"],x["num_h"],x["den_h"]
+    ).design(
+        x["controller"],x["specs"](),
+        controller_config=x.get("controller_config"),
+    )
+    data=dict(x)
+    data["specs"]=x["specs"]()
+    data["plot_focus"]={"mode":"auto_proportional"}
+    report=build_controller_html(design,data).decode("utf-8")
+    assert "7 — Discretização" in report
+    assert "Tustin" in report
