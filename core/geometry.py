@@ -137,11 +137,21 @@ def magnitude_breakdown(design,num_g,den_g,num_h,den_h):
 
 
 def angle_breakdown(design,num_g,den_g,num_h,den_h):
-    """Dados da condição de ângulo no formato da resolução manual."""
+    """Dados da condição de ângulo no formato da resolução manual.
+
+    Singularidades fixas do controlador entram na fase base. A singularidade
+    marcada como role='solved' é a incógnita determinada pela condição de
+    ângulo e pode ser tanto zero quanto polo.
+    """
     plant_zeros=[c for c in design.plant_contributions if c.kind=="zero"]
     plant_poles=[c for c in design.plant_contributions if c.kind=="pole"]
     controller_poles=[c for c in design.controller_contributions if c.kind=="pole"]
     controller_zeros=[c for c in design.controller_contributions if c.kind=="zero"]
+
+    fixed_controller_zeros=[c for c in controller_zeros if c.role!="solved"]
+    fixed_controller_poles=[c for c in controller_poles if c.role!="solved"]
+    solved_controller_zeros=[c for c in controller_zeros if c.role=="solved"]
+    solved_controller_poles=[c for c in controller_poles if c.role=="solved"]
 
     kg=float(np.trim_zeros(np.asarray(num_g,dtype=float),"f")[0]/np.trim_zeros(np.asarray(den_g,dtype=float),"f")[0])
     kh=float(np.trim_zeros(np.asarray(num_h,dtype=float),"f")[0]/np.trim_zeros(np.asarray(den_h,dtype=float),"f")[0])
@@ -150,11 +160,15 @@ def angle_breakdown(design,num_g,den_g,num_h,den_h):
     raw_base=(
         constant_phase
         +sum(c.angle_deg for c in plant_zeros)
+        +sum(c.angle_deg for c in fixed_controller_zeros)
         -sum(c.angle_deg for c in plant_poles)
-        -sum(c.angle_deg for c in controller_poles)
+        -sum(c.angle_deg for c in fixed_controller_poles)
     )
-    controller_phase=sum(c.angle_deg for c in controller_zeros)
-    final_raw=raw_base+controller_phase
+    solved_phase=(
+        sum(c.angle_deg for c in solved_controller_zeros)
+        -sum(c.angle_deg for c in solved_controller_poles)
+    )
+    final_raw=raw_base+solved_phase
     target=180.0+360.0*round((final_raw-180.0)/360.0)
 
     plant_ids={
@@ -162,14 +176,26 @@ def angle_breakdown(design,num_g,den_g,num_h,den_h):
         "pole":{c.label:i for i,c in enumerate(plant_poles,1)},
     }
 
+    solved_kind="gain"
+    if solved_controller_zeros:
+        solved_kind="zero"
+    elif solved_controller_poles:
+        solved_kind="pole"
+
     return {
         "plant_zeros":plant_zeros,
         "plant_poles":plant_poles,
         "controller_poles":controller_poles,
         "controller_zeros":controller_zeros,
+        "fixed_controller_zeros":fixed_controller_zeros,
+        "fixed_controller_poles":fixed_controller_poles,
+        "solved_controller_zeros":solved_controller_zeros,
+        "solved_controller_poles":solved_controller_poles,
+        "solved_kind":solved_kind,
+        "solved_count":len(solved_controller_zeros)+len(solved_controller_poles),
         "constant_phase":constant_phase,
         "raw_base":raw_base,
-        "controller_phase":controller_phase,
+        "controller_phase":solved_phase,
         "final_raw":final_raw,
         "target":target,
         "kg":kg,
