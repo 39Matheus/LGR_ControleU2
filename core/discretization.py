@@ -124,48 +124,55 @@ def transfer_latex(num,den,var):
 
 
 def difference_equation_latex(num,den):
-    """Forma causal em potências de z^-1, assumindo denominador normalizado."""
-    den=np.asarray(den,dtype=float)
-    num=np.asarray(num,dtype=float)
-    n=max(len(den),len(num))-1
-    den=np.pad(den,(n+1-len(den),0))
-    num=np.pad(num,(n+1-len(num),0))
-    if abs(den[0])<1e-15:
-        # Os coeficientes chegam em ordem decrescente. Se o numerador/denominador
-        # tiver grau menor que n, o padding deve ser à esquerda, mas o denominador
-        # principal precisa continuar em 1. Recalcula sem elevar artificialmente n.
-        n=len(den)-1
-    # Melhor: use o grau real do denominador como referência.
-    den=np.asarray(den,dtype=float)
-    nz=np.flatnonzero(np.abs(den)>1e-12)
-    if len(nz)==0:
-        return ""
-    den=den[nz[0]:]
-    order=len(den)-1
-    num=np.asarray(num,dtype=float)
-    if len(num)<order+1:
-        num=np.pad(num,(order+1-len(num),0))
-    elif len(num)>order+1:
-        # função imprópria: ainda apresenta a relação algébrica, mas sem tentar
-        # impor forma causal de ordem menor.
-        order=max(order,len(num)-1)
-        den=np.pad(den,(order+1-len(den),0))
-    if abs(den[0]-1)>1e-10:
-        num=num/den[0]
-        den=den/den[0]
+    """Equação temporal associada a N(z)/D(z).
 
-    lhs=[r"y[k]"]
+    Para funções próprias, resulta na forma causal usual com u[k-i].
+    Se grau(N)>grau(D), a discretização é imprópria e aparecem termos futuros
+    u[k+i]; isso é mostrado explicitamente em vez de gerar divisões por zero.
+    """
+    num=np.asarray(num,dtype=float)
+    den=np.asarray(den,dtype=float)
+    num[np.abs(num)<1e-12]=0.0
+    den[np.abs(den)<1e-12]=0.0
+
+    # Remove zeros à esquerda sem alterar potências internas.
+    nz_num=np.flatnonzero(np.abs(num)>1e-12)
+    nz_den=np.flatnonzero(np.abs(den)>1e-12)
+    if len(nz_den)==0:
+        return ""
+    num=num[nz_num[0]:] if len(nz_num) else np.asarray([0.0])
+    den=den[nz_den[0]:]
+
+    lead=den[0]
+    if abs(lead)<1e-15:
+        return ""
+    num=num/lead
+    den=den/lead
+
+    n=len(den)-1
+    m=len(num)-1
+
     rhs=[]
+
+    # D(z)Y(z)=N(z)U(z). Dividindo por z^n:
+    # y[k] + a1 y[k-1] + ... = soma b_j u[k + (m-j-n)].
     for i,a in enumerate(den[1:],1):
-        coef=-a
+        coef=-float(a)
         if abs(coef)>1e-12:
             rhs.append((coef,rf"y[k-{i}]"))
-    # num em ordem decrescente de z. Dividir por z^order gera b_i z^-i.
-    if len(num)<order+1:
-        num=np.pad(num,(order+1-len(num),0))
-    for i,b in enumerate(num,0):
-        if abs(b)>1e-12:
-            rhs.append((b,rf"u[k-{i}]"))
+
+    for j,b in enumerate(num):
+        coef=float(b)
+        if abs(coef)<=1e-12:
+            continue
+        shift=m-j-n
+        if shift>0:
+            symbol=rf"u[k+{shift}]"
+        elif shift==0:
+            symbol=r"u[k]"
+        else:
+            symbol=rf"u[k-{abs(shift)}]"
+        rhs.append((coef,symbol))
 
     def fmt_term(coef,symbol,first=False):
         sign="-" if coef<0 else ("+" if not first else "")
@@ -178,11 +185,18 @@ def difference_equation_latex(num,den):
 
     if not rhs:
         return r"y[k]=0"
-    rendered=[]
-    for i,(coef,sym) in enumerate(rhs):
-        rendered.append(fmt_term(coef,sym,first=(i==0)))
+    rendered=[
+        fmt_term(coef,symbol,first=(i==0))
+        for i,(coef,symbol) in enumerate(rhs)
+    ]
     return r"y[k]="+"".join(rendered)
 
+
+def is_noncausal_transfer(num,den):
+    """True quando grau do numerador discreto excede o do denominador."""
+    num=np.trim_zeros(np.asarray(num,dtype=float),"f")
+    den=np.trim_zeros(np.asarray(den,dtype=float),"f")
+    return len(num)-1 > len(den)-1
 
 def _symbolic_discretize(num,den,T,method):
     s,z=sp.symbols("s z")
@@ -247,6 +261,13 @@ def discretize_transfer(num,den,sample_time,method,target_label="G(s)") -> Discr
         substituted_latex=transfer_latex(num_d,den_d,z)
     zeros=[complex(v) for v in np.roots(num_d)] if len(num_d)>1 else []
     poles=[complex(v) for v in np.roots(den_d)] if len(den_d)>1 else []
+
+    if is_noncausal_transfer(num_d,den_d):
+        notes.append(
+            "A função discreta obtida é imprópria (grau do numerador maior que o "
+            "do denominador). A equação de diferenças contém termo(s) futuro(s), "
+            "como u[k+1], portanto não é diretamente causal/implementável nessa forma."
+        )
 
     return DiscretizationResult(
         method=_METHOD_LABELS[key],
