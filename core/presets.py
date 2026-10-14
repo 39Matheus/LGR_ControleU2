@@ -50,7 +50,7 @@ EXERCISES={
         "specs":lambda:DesignSpecs.from_mp_ts(10,3,0.05),
         "discretize_after_design":True,
         "discretization_target":"Controlador Gc(s)",
-        "discretization_method":"Tustin",
+        "discretization_method":"Tustin / Bilinear",
         "sample_time":2.0,
         "description":(
             "G(s)=5(s+3)/[s(s+4)], H(s)=1/(s+1). "
