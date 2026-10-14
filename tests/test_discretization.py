@@ -98,3 +98,17 @@ def test_coefficient_table_aligns_by_power_and_hides_numeric_noise():
     assert [r["denominador"] for r in rows]==[
         "1","5.80608365","8.224334601","5.80608365","7.224334601"
     ]
+
+
+def test_forward_pid_improper_difference_equation_is_explicitly_noncausal():
+    r=discretize_transfer(
+        [0.53904178,1.4362133,0.95665522],
+        [1.0,0.0],
+        2.0,
+        "Euler / Forward",
+        target_label="Gc(s)",
+    )
+    assert "inf" not in r.difference_equation_latex.lower()
+    assert r"u[k+1]" in r.difference_equation_latex
+    assert r"y[k-1]" in r.difference_equation_latex
+    assert any("imprópria" in note for note in r.notes)
