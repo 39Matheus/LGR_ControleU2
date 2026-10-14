@@ -112,3 +112,10 @@ def test_forward_pid_improper_difference_equation_is_explicitly_noncausal():
     assert r"u[k+1]" in r.difference_equation_latex
     assert r"y[k-1]" in r.difference_equation_latex
     assert any("imprópria" in note for note in r.notes)
+
+
+def test_second_list_q1_preset_uses_tustin_ui_label():
+    x=get_exercise("Lista U2.2 — Questão 1 — PID + Tustin")
+    assert x["discretization_method"]=="Tustin / Bilinear"
+    assert math.isclose(x["sample_time"],2.0)
+    assert x["discretization_target"]=="Controlador Gc(s)"
