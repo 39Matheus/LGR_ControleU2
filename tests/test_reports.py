@@ -1,0 +1,97 @@
+from core.controllers import ControllerDesigner
+from core.presets import EXERCISES,get_exercise
+from reports.full_pdf import _geometry_trace_color,build_controller_full_pdf
+from reports.html import build_controller_html
+from reports.pdf import build_controller_pdf
+
+
+def _q1():
+    x=get_exercise("Questão 1 — PD (Mp e ts 5%)")
+    d=ControllerDesigner(
+        x["num_g"],x["den_g"],x["num_h"],x["den_h"]
+    ).design(x["controller"],x["specs"](),auto_refine=False)
+    data={
+        "controller":x["controller"],
+        "num_g":x["num_g"],
+        "den_g":x["den_g"],
+        "num_h":x["num_h"],
+        "den_h":x["den_h"],
+        "specs":x["specs"](),
+        "auto_refine":False,
+    }
+    return d,data
+
+
+def test_complete_html_report_contains_full_derivation_and_plots():
+    design,data=_q1()
+    report=build_controller_html(design,data).decode("utf-8")
+
+    assert "1 — Obtenção do polo desejado" in report
+    assert "2 — Condição de ângulo" in report
+    assert "3 — Condição de módulo" in report
+    assert "4 — Controlador" in report
+    assert "5 — Representação visual do projeto" in report
+    assert "6 — Verificação numérica" in report
+    assert "plotly" in report.lower()
+    assert r"\,\cdot\," in report
+    assert r"\cdotA" not in report
+    assert "Enquadramento: automático proporcional: +20% em x e +10% em y" in report
+
+
+def test_complete_pdf_report_is_valid_and_nontrivial():
+    design,data=_q1()
+    report=build_controller_full_pdf(design,data)
+
+    assert report.startswith(b"%PDF")
+    assert len(report)>50000
+
+
+def test_pdf_geometry_uses_explicit_colors():
+    assert _geometry_trace_color("Polos")=="#d62728"
+    assert _geometry_trace_color("Zeros")=="#1f77b4"
+    assert _geometry_trace_color("Polos desejados")=="#ff9800"
+    assert _geometry_trace_color("p1: 30.00°",0)!="#000000"
+    assert _geometry_trace_color("p2: 40.00°",1)!=_geometry_trace_color("p1: 30.00°",0)
+
+
+def test_second_list_report_contains_discretization():
+    x=get_exercise("Lista U2.2 — Questão 1 — PID + Tustin")
+    design=ControllerDesigner(
+        x["num_g"],x["den_g"],x["num_h"],x["den_h"]
+    ).design(
+        x["controller"],x["specs"](),
+        controller_config=x.get("controller_config"),
+    )
+    data=dict(x)
+    data["specs"]=x["specs"]()
+    data["plot_focus"]={"mode":"auto_proportional"}
+    report=build_controller_html(design,data).decode("utf-8")
+    assert "7 — Discretização" in report
+    assert "Tustin" in report
+
+
+def test_second_list_q2_generic_reports_render():
+    x=get_exercise("Lista U2.2 — Questão 2 — Genérico a/(s+b) + Euler")
+    design=ControllerDesigner(
+        x["num_g"],x["den_g"],x["num_h"],x["den_h"]
+    ).design(
+        x["controller"],x["specs"](),
+        controller_config=x.get("controller_config"),
+    )
+    data=dict(x)
+    data["specs"]=x["specs"]()
+    data["plot_focus"]={"mode":"auto_proportional"}
+
+    html=build_controller_html(design,data).decode("utf-8")
+    assert "7 — Discretização" in html
+    assert "Euler / Forward" in html
+    assert "a=K_c" in html
+
+    full_pdf=build_controller_full_pdf(design,data)
+    assert full_pdf.startswith(b"%PDF")
+    assert len(full_pdf)>50000
+
+    proof_pdf=build_controller_pdf(
+        design,x["num_g"],x["den_g"],x["num_h"],x["den_h"],data=data
+    )
+    assert proof_pdf.startswith(b"%PDF")
