@@ -124,3 +124,20 @@ streamlit run app.py
 pip install pytest
 pytest -q
 ```
+
+
+## Unidade 3 — Lista 1: espaço de estados
+
+O menu inicial agora permite alternar entre o módulo preservado da **Unidade 2** e o módulo da **Unidade 3 / Lista 1**.
+
+A U3L1 possui presets editáveis para **todos os itens**:
+
+- **Q1, sistemas 1 e 2**: polinômio característico, autovalores/estabilidade, matrizes de controlabilidade `U=[B AB ... A^(n−1)B]` e observabilidade `V=[C;CA;...;CA^(n−1)]`, postos e conclusões;
+- **Q2 e Q3**: projeto de realimentação de estados `u(t)=Kx(t)` e projeto do observador usando as fórmulas de Ackermann, com `q(A)`, matriz inversa, ganhos exatos e conferência por polinômios e polos;
+- **Q4**: realização de `G(s)=(3s²+4s−2)/(s³+3s²+7s+5)` na **forma canônica controlável** da apostila, projeto do observador `−1,−1,−2` e realimentação `−4,−4,−5`.
+
+**Convenção do professor:** `u=Kx`, portanto `A_mf=A+BK` e `K=−[0 ... 1]U⁻¹q(A)`. O observador usa `A−LC`, com `L=q(A)V⁻¹[0 ... 1]ᵀ`. As equações seguem as seções 7.3–7.8 da apostila.
+
+A interface aceita matrizes e coeficientes editáveis, polos reais e pares conjugados, e disponibiliza exportação da resolução em Markdown. Os cálculos utilizam **SymPy exato**, preservando frações. Sistemas não controláveis/observáveis recebem aviso explicativo.
+
+Testes da nova lista: `pytest -q tests/test_state_space.py`.
