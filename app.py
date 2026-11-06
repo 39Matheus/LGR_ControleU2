@@ -3,14 +3,21 @@ import warnings
 import streamlit as st
 
 from ui.main_view import render_main_view
+from ui.state_space_view import render_state_space_view
 
 warnings.filterwarnings("ignore")
 
-st.set_page_config(page_title="Calculadora LGR — Unidade 2",layout="wide")
-st.title("Calculadora LGR — Projeto de Sistemas de Controle")
-st.caption(
-    "Escopo: análise e projeto pelo LGR + aproximação discreta de funções "
-    "de transferência contínuas (Forward/Euler, Backward, Tustin e invariância ao degrau)."
-)
+st.set_page_config(page_title="Calculadora de Controle — U2 e U3", layout="wide")
+st.title("Calculadora — Projeto de Sistemas de Controle")
+st.caption("Unidade 2: LGR, projeto e discretização · Unidade 3: Lista 1, espaço de estados.")
 
-render_main_view()
+module = st.radio(
+    "Módulo de estudo",
+    ["Unidade 3 — Lista 1 (espaço de estados)", "Unidade 2 — LGR e discretização"],
+    horizontal=True,
+    key="study_module",
+)
+if module.startswith("Unidade 3"):
+    render_state_space_view()
+else:
+    render_main_view()
