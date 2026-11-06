@@ -20,7 +20,8 @@ def test_question_is_complete_and_has_ordered_sections(question,sections):
     if question == 1:
         assert 'Sistema 1' in doc.sections[0].title
         assert 'Sistema 2' in doc.sections[1].title
-        assert text.count(r'A=\left') <= 2   # uma visualização por sistema
+        assert sum(step.kind == "heading" and step.value == "Conferência dos dados de entrada"
+                   for sec in doc.sections for step in sec.steps) == 2
     if question in (2,3):
         assert sum('Conferência dos dados' in s.value for section in doc.sections for s in section.steps)==1
         assert 'K=' in text and 'L=' in text
@@ -37,7 +38,7 @@ def test_pdf_html_exports_match_sections_and_are_renderable():
     assert pdf.startswith(b'%PDF-') and len(pdf)>1000
     assert '<!doctype html>' in html and 'MathJax' in html
     assert 'Sistema 1' in html and 'Sistema 2' in html
-    assert 'matriz' in html.lower() or 'Matriz' in html
+    assert 'Controlabilidade' in html and 'Observabilidade' in html
 
 
 def test_individual_mode_exports_only_one_part():
