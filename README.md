@@ -148,3 +148,17 @@ Testes da nova lista: `pytest -q tests/test_state_space.py`.
 A tela foi refinada para **fórmula → cálculo intermediário → resultado → conferência**, mantendo as matrizes **A, B e C visíveis apenas uma vez**, na conferência das entradas. Na Q1, mostra `sI−A`, desenvolvimento do determinante, produtos `AB`, `A²B`, `CA`, `CA²`, `U`, `V`, determinantes e postos. Nas questões de Ackermann, mostra o polinômio desejado fatorado e expandido, `q(A)` numérico, a matriz de controlabilidade/observabilidade, sua inversa, o produto intermediário `eₙᵀU⁻¹` ou `V⁻¹eₙ`, o ganho `K` ou `L` e a conferência de `A+BK` ou `A−LC`.
 
 Na forma canônica controlável, explicita os coeficientes `α` e `β` antes das matrizes. O botão de exportação Markdown reproduz esses mesmos passos; os dados alterados invalidam a solução anterior. Contas complementares são recolhidas para evitar poluição visual.
+
+
+## Unidade 3, Lista 1 — relatórios completos por questão
+
+A nova modalidade padrão **Questão completa (recomendado)** tem quatro presets, um para cada questão da U3L1:
+
+1. **Q1:** a), b), c) para os **dois sistemas**, organizados em duas seções num único documento.
+2. **Q2:** sistema 1 com a) realimentação de estados e b) observador de estados.
+3. **Q3:** sistema 2 com c) realimentação de estados e d) observador de estados.
+4. **Q4:** função de transferência da lista com a) forma canônica controlável, b) observador e c) realimentação.
+
+Os documentos reproduzem os cálculos essenciais (fórmula, operações intermediárias, resultado, conferência), seguindo o capítulo 7 da apostila: **u=Kx => A+BK**, observador **A−LC**. As matrizes da entrada são exibidas uma só vez por sistema. Cada questão pode ser exportada para **PDF** ou **HTML** com MathJax; é possível também preparar um **ZIP com 4 PDFs e 4 HTMLs**. O modo **Item individual (editável)** preserva campos de matrizes, função de transferência, polos e seleção da operação, com exportação PDF/HTML específica. O PDF usa ReportLab e renderização matemática local, sem depender de serviços remotos nem LaTeX instalado no servidor; o HTML usa MathJax via CDN para fórmulas.
+
+Execute `pytest -q tests/test_state_space_questions.py` para os testes de agrupamento, relatórios e ZIP.
