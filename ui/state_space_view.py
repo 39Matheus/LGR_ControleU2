@@ -9,7 +9,11 @@ from core.state_space import (
     U3L1_SYSTEMS, analyze_system, controllable_canonical,
     place_observer, place_state_feedback,
 )
-from core.state_space_steps import build_resolution, resolution_markdown
+from core.state_space_steps import build_resolution
+from core.state_space_questions import QUESTION_TITLES, solve_full_question, individual_document
+from reports.state_space_export import (
+    build_state_space_pdf, build_state_space_html, build_all_state_space_zip,
+)
 
 ANALYZE = "Estabilidade, controlabilidade e observabilidade"
 FEEDBACK = "Realimentação de estados — K"
@@ -151,9 +155,95 @@ def _operation_key(operation):
     return {ANALYZE: "analysis", FEEDBACK: "K", OBSERVER: "L", CANONICAL: "canonical"}[operation]
 
 
+
+@st.cache_data(show_spinner=False)
+def _complete_question(number):
+    return solve_full_question(number)
+
+
+@st.cache_data(show_spinner=False)
+def _pdf_bytes(document):
+    return build_state_space_pdf(document)
+
+
+@st.cache_data(show_spinner=False)
+def _html_bytes(document):
+    return build_state_space_html(document)
+
+
+def _render_complete_question_mode():
+    st.caption(
+        "Um preset por questão: Q1 reúne os dois sistemas; Q2 e Q3 reúnem "
+        "realimentação e observador; Q4 reúne forma canônica, observador e realimentação. "
+        "Os dados originais aparecem uma vez por sistema."
+    )
+    number = st.selectbox(
+        "Selecione a questão completa",
+        list(QUESTION_TITLES),
+        format_func=lambda n: QUESTION_TITLES[n],
+        key="u3_full_question",
+    )
+    try:
+        document = _complete_question(number)
+    except (ValueError, ArithmeticError, sp.SympifyError) as exc:
+        st.error(f"Não foi possível resolver a questão completa: {exc}")
+        return
+
+    st.subheader("Resolução completa — fórmula, operações e conferência")
+    st.caption("Os mesmos passos são preservados nos arquivos PDF e HTML.")
+    col_pdf, col_html = st.columns(2)
+    col_pdf.download_button(
+        "Baixar PDF da questão",
+        data=_pdf_bytes(document),
+        file_name=f"U3L1_Questao_{number}.pdf",
+        mime="application/pdf",
+        key=f"u3_pdf_full_{number}",
+        use_container_width=True,
+    )
+    col_html.download_button(
+        "Baixar HTML da questão",
+        data=_html_bytes(document),
+        file_name=f"U3L1_Questao_{number}.html",
+        mime="text/html",
+        key=f"u3_html_full_{number}",
+        use_container_width=True,
+    )
+    for section in document.sections:
+        st.markdown("---")
+        st.markdown("### " + section.title)
+        _render_steps(section.steps)
+    st.divider()
+    with st.expander("Pacote para entrega — 4 PDFs + 4 HTMLs"):
+        st.caption(
+            "Gera oito arquivos com os mesmos cálculos apresentados, "
+            "organizados por questão e reunidos em um único ZIP."
+        )
+        if st.button("Preparar pacote completo", key="u3_prepare_zip"):
+            with st.spinner("Gerando os relatórios das quatro questões..."):
+                st.session_state["u3_complete_zip"] = build_all_state_space_zip(_complete_question)
+        if "u3_complete_zip" in st.session_state:
+            st.download_button(
+                "Baixar ZIP (4 PDFs + 4 HTMLs)",
+                data=st.session_state["u3_complete_zip"],
+                file_name="U3L1_Questoes_1_a_4_PDF_HTML.zip",
+                mime="application/zip",
+                use_container_width=True,
+                key="u3_zip_download",
+            )
+
+
 def render_state_space_view():
     st.header("Unidade 3 · Lista 1 — Espaço de estados")
     st.caption("Resolução para reproduzir na prova: fórmula → substituição principal → resultado → conferência. Apostila: capítulo 7.")
+    scope=st.radio(
+        "Modo de resolução",
+        ["Questão completa (recomendado)", "Item individual (editável)"],
+        horizontal=True,
+        key="u3_scope",
+    )
+    if scope.startswith("Questão completa"):
+        _render_complete_question_mode()
+        return
     if "u3_question" not in st.session_state:
         st.session_state["u3_question"] = next(iter(QUESTIONS))
         _select_preset()
@@ -229,6 +319,15 @@ def render_state_space_view():
     # O download inclui também os dados originais, uma única vez, e as contas da tela.
     export_steps = build_resolution(analysis, placement=placement, canonical=canonical,
                                     operation=mode, include_input=True)
-    st.download_button("Baixar resolução completa (.md)",
-                       data=resolution_markdown(export_steps),
-                       file_name="resolucao_U3L1.md", mime="text/markdown")
+    document=individual_document(st.session_state["u3_question"], export_steps)
+    c_pdf,c_html=st.columns(2)
+    c_pdf.download_button(
+        "Baixar PDF do item", data=_pdf_bytes(document),
+        file_name="U3L1_Item_Individual.pdf", mime="application/pdf",
+        use_container_width=True, key="u3_individual_pdf",
+    )
+    c_html.download_button(
+        "Baixar HTML do item", data=_html_bytes(document),
+        file_name="U3L1_Item_Individual.html", mime="text/html",
+        use_container_width=True, key="u3_individual_html",
+    )
