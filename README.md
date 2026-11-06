@@ -141,3 +141,10 @@ A U3L1 possui presets editáveis para **todos os itens**:
 A interface aceita matrizes e coeficientes editáveis, polos reais e pares conjugados, e disponibiliza exportação da resolução em Markdown. Os cálculos utilizam **SymPy exato**, preservando frações. Sistemas não controláveis/observáveis recebem aviso explicativo.
 
 Testes da nova lista: `pytest -q tests/test_state_space.py`.
+
+
+### Resolução reproduzível da U3L1
+
+A tela foi refinada para **fórmula → cálculo intermediário → resultado → conferência**, mantendo as matrizes **A, B e C visíveis apenas uma vez**, na conferência das entradas. Na Q1, mostra `sI−A`, desenvolvimento do determinante, produtos `AB`, `A²B`, `CA`, `CA²`, `U`, `V`, determinantes e postos. Nas questões de Ackermann, mostra o polinômio desejado fatorado e expandido, `q(A)` numérico, a matriz de controlabilidade/observabilidade, sua inversa, o produto intermediário `eₙᵀU⁻¹` ou `V⁻¹eₙ`, o ganho `K` ou `L` e a conferência de `A+BK` ou `A−LC`.
+
+Na forma canônica controlável, explicita os coeficientes `α` e `β` antes das matrizes. O botão de exportação Markdown reproduz esses mesmos passos; os dados alterados invalidam a solução anterior. Contas complementares são recolhidas para evitar poluição visual.
