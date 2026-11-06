@@ -1,4 +1,4 @@
-"""Interface Streamlit dedicada à Lista U3.1, sem alterar a calculadora da U2."""
+"""Interface U3L1: contas essenciais reproduzíveis, sem repetir as matrizes-base."""
 
 import re
 
@@ -9,6 +9,7 @@ from core.state_space import (
     U3L1_SYSTEMS, analyze_system, controllable_canonical,
     place_observer, place_state_feedback,
 )
+from core.state_space_steps import build_resolution, resolution_markdown
 
 ANALYZE = "Estabilidade, controlabilidade e observabilidade"
 FEEDBACK = "Realimentação de estados — K"
@@ -37,18 +38,19 @@ def _poles_text(values):
 
 
 def _select_preset():
-    name, op = QUESTIONS[st.session_state["u3_question"]]
-    preset = U3L1_SYSTEMS[name]
-    st.session_state["u3_operation"] = op
-    st.session_state["u3_representation"] = "G(s)" if "num" in preset else "Matrizes A, B, C"
-    if "num" in preset:
-        st.session_state["u3_num"] = "; ".join(map(str, preset["num"]))
-        st.session_state["u3_den"] = "; ".join(map(str, preset["den"]))
+    name, operation = QUESTIONS[st.session_state["u3_question"]]
+    p = U3L1_SYSTEMS[name]
+    st.session_state["u3_operation"] = operation
+    st.session_state["u3_representation"] = "G(s)" if "num" in p else "Matrizes A, B, C"
+    if "num" in p:
+        st.session_state["u3_num"] = "; ".join(map(str, p["num"]))
+        st.session_state["u3_den"] = "; ".join(map(str, p["den"]))
     else:
         for key in ("A", "B", "C"):
-            st.session_state["u3_" + key] = _matrix_text(preset[key])
-    poles = preset["observer_poles"] if op == OBSERVER else preset["feedback_poles"]
-    st.session_state["u3_poles"] = _poles_text(poles)
+            st.session_state["u3_" + key] = _matrix_text(p[key])
+    desired = p["observer_poles"] if operation == OBSERVER else p["feedback_poles"]
+    st.session_state["u3_poles"] = _poles_text(desired)
+    st.session_state.pop("u3_result", None)
 
 
 def _scalar(text):
@@ -60,20 +62,20 @@ def _scalar(text):
 
 
 def _coefficients(text):
-    values = [v.strip() for v in text.split(";") if v.strip()]
-    if not values:
+    parts = [v.strip() for v in text.split(";") if v.strip()]
+    if not parts:
         raise ValueError("Informe os coeficientes separados por ponto e vírgula.")
-    return [_scalar(v) for v in values]
+    return [_scalar(v) for v in parts]
 
 
 def _matrix(text, label):
     rows = [row.strip() for row in text.splitlines() if row.strip()]
     if not rows:
         raise ValueError(f"Matriz {label}: campo vazio.")
-    values = [[_scalar(x) for x in row.split(";")] for row in rows]
-    if any(len(row) != len(values[0]) for row in values):
+    data = [[_scalar(x) for x in row.split(";")] for row in rows]
+    if any(len(row) != len(data[0]) for row in data):
         raise ValueError(f"Matriz {label}: todas as linhas devem ter o mesmo número de colunas.")
-    return sp.Matrix(values)
+    return sp.Matrix(data)
 
 
 def _poles(text):
@@ -95,124 +97,91 @@ def _poles(text):
     return result
 
 
-def _eigen_text(eigenvalues):
-    values = []
-    for z in eigenvalues:
-        if abs(z.imag) < 1e-8:
-            values.append(f"{z.real:.6g}")
+def _signature():
+    """Evita mostrar uma solução anterior após alterações dos parâmetros."""
+    names = ("u3_question", "u3_operation", "u3_representation", "u3_A", "u3_B",
+             "u3_C", "u3_num", "u3_den", "u3_poles")
+    return tuple(str(st.session_state.get(name, "")) for name in names)
+
+
+def _show_input_preview():
+    """A, B, C (ou G) aparecem uma única vez, antes da resolução."""
+    with st.expander("Conferir dados interpretados", expanded=True):
+        if st.session_state["u3_representation"] == "G(s)":
+            num = _coefficients(st.session_state["u3_num"])
+            den = _coefficients(st.session_state["u3_den"])
+            numerator = sp.Poly.from_list(num, gens=sp.Symbol("s")).as_expr()
+            denominator = sp.Poly.from_list(den, gens=sp.Symbol("s")).as_expr()
+            if denominator == 0:
+                raise ValueError("Denominador de G(s) não pode ser zero.")
+            st.latex(r"G(s)=\frac{" + sp.latex(numerator) + "}{" + sp.latex(denominator) + "}")
         else:
-            values.append(f"{z.real:.6g}{z.imag:+.6g}i")
-    return "; ".join(values)
+            A, B, C = (_matrix(st.session_state["u3_"+key], key) for key in ("A", "B", "C"))
+            # Confirmação sem repetições nas etapas de Ackermann ou no determinante.
+            c1, c2, c3 = st.columns([2, 1, 2])
+            c1.latex("A=" + sp.latex(A))
+            c2.latex("B=" + sp.latex(B))
+            c3.latex("C=" + sp.latex(C))
+            if A.rows != A.cols or B.shape != (A.rows, 1) or C.shape != (1, A.rows):
+                st.warning("Confira as dimensões: A deve ser n×n, B deve ser n×1 e C deve ser 1×n.")
 
 
-def _line(name, expr):
-    st.latex(rf"{name}={sp.latex(expr)}")
+def _render_steps(steps):
+    details = []
+    for step in steps:
+        if step.kind == "heading":
+            st.markdown("#### " + step.value)
+        elif step.kind == "math":
+            st.latex(step.value)
+        elif step.kind == "success":
+            st.success(step.value)
+        elif step.kind == "warning":
+            st.warning(step.value)
+        elif step.kind == "detail_math":
+            details.append(step.value)
+        else:
+            st.caption(step.value)
+    if details:
+        with st.expander("Contas complementares (opcionais)"):
+            for expression in details:
+                st.latex(expression)
 
 
-def _show_analysis(result):
-    st.markdown("#### 1. Polinômio característico e estabilidade")
-    st.latex(r"\Delta(s)=\det(sI-A)=" + sp.latex(result.characteristic))
-    st.write("Autovalores de A:", _eigen_text(result.eigenvalues))
-    if result.stable:
-        st.success("Estável: todos os autovalores possuem parte real negativa.")
-    else:
-        st.warning("Não é assintoticamente estável: existe autovalor com parte real não negativa.")
-
-    st.markdown("#### 2. Matriz de controlabilidade")
-    st.latex(r"U=[B\quad AB\quad\ldots\quad A^{n-1}B]=" + sp.latex(result.U))
-    st.write(f"posto(U) = {result.rank_U} de n = {result.A.rows}; det(U) = {result.U.det()}.")
-    if result.controllable:
-        st.success("Sistema controlável.")
-    else:
-        st.warning("Sistema não controlável: não é possível posicionar arbitrariamente todos os polos por realimentação.")
-
-    st.markdown("#### 3. Matriz de observabilidade")
-    st.latex(r"V=\begin{bmatrix}C\\CA\\\vdots\\CA^{n-1}\end{bmatrix}=" + sp.latex(result.V))
-    st.write(f"posto(V) = {result.rank_V} de n = {result.A.rows}; det(V) = {result.V.det()}.")
-    if result.observable:
-        st.success("Sistema observável.")
-    else:
-        st.warning("Sistema não observável: não é possível posicionar arbitrariamente todos os polos do observador.")
-
-
-def _show_placement(result, analysis):
-    st.markdown("#### 1. Verificação da condição de existência")
-    is_feedback = result.mode == "K"
-    if is_feedback:
-        st.write(f"posto(U) = {analysis.rank_U} = n: sistema controlável.")
-    else:
-        st.write(f"posto(V) = {analysis.rank_V} = n: sistema observável.")
-    st.markdown("#### 2. Polinômio desejado e q(A)")
-    st.latex(r"\Delta_d(s)=\prod_{j=1}^{n}(s-\lambda_j)=" + sp.latex(sp.factor(result.desired)))
-    _line("q(A)", result.qA)
-    st.markdown("#### 3. Fórmula de Ackermann (convenção da apostila)")
-    if is_feedback:
-        st.latex(r"K=-\begin{bmatrix}0&\cdots&0&1\end{bmatrix}U^{-1}q(A)")
-        _line(r"U^{-1}", result.inverse_matrix)
-        _line("K", result.gain)
-        st.markdown("#### 4. Conferência de A + BK")
-        _line("A+BK", result.result_A)
-    else:
-        st.latex(r"L=q(A)V^{-1}\begin{bmatrix}0&\cdots&0&1\end{bmatrix}^{T}")
-        _line(r"V^{-1}", result.inverse_matrix)
-        _line("L", result.gain)
-        st.markdown("#### 4. Conferência de A − LC")
-        _line("A-LC", result.result_A)
-    st.latex(r"\det(sI-A_{\mathrm{final}})=" + sp.latex(result.result_characteristic))
-    st.write("Polos efetivamente obtidos:", _eigen_text(result.result_eigenvalues))
-    st.success("Polinômio e polos conferidos exatamente com os valores desejados.")
-
-
-def _report(analysis, placement=None, canonical=None):
-    lines = ["# Resolução — Lista 1 da Unidade 3", "",
-             "Metodologia: apostila, seções 7.3 a 7.8. Convenção: u=Kx, A_mf=A+BK; erro do observador: A-LC.", ""]
-    if canonical is not None:
-        lines.extend(["## Forma canônica controlável",
-                      f"G(s) = {canonical.original_transfer}",
-                      f"A = {canonical.A}; B = {canonical.B}; C = {canonical.C}; D = {canonical.D}",
-                      f"G_reconstruída(s) = {canonical.reconstructed_transfer}", ""])
-    lines.extend(["## Verificação do sistema", f"A = {analysis.A}; B = {analysis.B}; C = {analysis.C}",
-                  f"Δ(s) = {analysis.characteristic}",
-                  f"Autovalores: {_eigen_text(analysis.eigenvalues)}",
-                  f"Estabilidade assintótica: {'sim' if analysis.stable else 'não'}",
-                  f"U = {analysis.U}; posto(U) = {analysis.rank_U}; controlável: {analysis.controllable}",
-                  f"V = {analysis.V}; posto(V) = {analysis.rank_V}; observável: {analysis.observable}", ""])
-    if placement is not None:
-        lines.extend(["## Projeto por Ackermann", f"Δ_d(s) = {placement.desired}",
-                      f"q(A) = {placement.qA}", f"Matriz inversa usada = {placement.inverse_matrix}",
-                      f"{placement.mode} = {placement.gain}",
-                      f"Matriz dinâmica final = {placement.result_A}",
-                      f"Δ_final(s) = {placement.result_characteristic}",
-                      f"Polos finais: {_eigen_text(placement.result_eigenvalues)}"])
-    return "\n\n".join(lines)
+def _operation_key(operation):
+    return {ANALYZE: "analysis", FEEDBACK: "K", OBSERVER: "L", CANONICAL: "canonical"}[operation]
 
 
 def render_state_space_view():
     st.header("Unidade 3 · Lista 1 — Espaço de estados")
-    st.caption("Questões 1 a 4; conforme as fórmulas de estabilidade, U, V, Ackermann e forma canônica do capítulo 7 da apostila.")
+    st.caption("Resolução para reproduzir na prova: fórmula → substituição principal → resultado → conferência. Apostila: capítulo 7.")
     if "u3_question" not in st.session_state:
         st.session_state["u3_question"] = next(iter(QUESTIONS))
         _select_preset()
 
-    st.selectbox("Selecione o item da lista", list(QUESTIONS), key="u3_question", on_change=_select_preset)
+    st.selectbox("Questão da lista", list(QUESTIONS), key="u3_question", on_change=_select_preset)
     st.radio("Operação", [ANALYZE, FEEDBACK, OBSERVER, CANONICAL], key="u3_operation")
-    st.radio("Representação de entrada", ["Matrizes A, B, C", "G(s)"], horizontal=True, key="u3_representation")
+    st.radio("Representação da entrada", ["Matrizes A, B, C", "G(s)"], key="u3_representation", horizontal=True)
 
     if st.session_state["u3_representation"] == "G(s)":
-        st.caption("Coeficientes em ordem decrescente, incluindo zeros ausentes. Ex.: 3s²+4s−2 → 3;4;-2.")
+        st.caption("Coeficientes em ordem decrescente; incluir zeros em potências ausentes. Ex.: 3s²+4s−2 → 3;4;-2.")
         a, b = st.columns(2)
         a.text_input("Numerador de G(s)", key="u3_num")
         b.text_input("Denominador de G(s)", key="u3_den")
     else:
-        st.caption("Uma linha da matriz por linha de texto; elementos separados por ';'. Aceita inteiros, decimais e frações.")
+        st.caption("Uma linha por linha de texto, com valores separados por ';'. Aceita inteiros, decimais e frações.")
         st.text_area("A", key="u3_A", height=110)
         a, b = st.columns(2)
-        a.text_area("B (vetor coluna)", key="u3_B", height=90)
-        b.text_area("C (vetor linha)", key="u3_C", height=90)
+        a.text_area("B (coluna)", key="u3_B", height=90)
+        b.text_area("C (linha)", key="u3_C", height=90)
 
     if st.session_state["u3_operation"] in (FEEDBACK, OBSERVER):
         st.text_input("Polos desejados (separados por ';')", key="u3_poles",
-                      help="Ex.: -2+i; -2-i; -10. Escreva os polos repetidos duas vezes.")
+                      help="Ex.: -2+i; -2-i; -10. Repita os polos com multiplicidade.")
+    try:
+        _show_input_preview()
+    except (ValueError, TypeError, sp.SympifyError) as exc:
+        st.warning(f"Ainda não foi possível interpretar os dados: {exc}")
+
     if st.button("Resolver item da U3L1", type="primary", use_container_width=True):
         try:
             canonical = None
@@ -221,7 +190,7 @@ def render_state_space_view():
                                                    _coefficients(st.session_state["u3_den"]))
                 A, B, C = canonical.A, canonical.B, canonical.C
             else:
-                A, B, C = (_matrix(st.session_state["u3_" + key], key) for key in ("A", "B", "C"))
+                A, B, C = (_matrix(st.session_state["u3_"+key], key) for key in ("A", "B", "C"))
             analysis = analyze_system(A, B, C)
             operation = st.session_state["u3_operation"]
             placement = None
@@ -230,32 +199,36 @@ def render_state_space_view():
             elif operation == OBSERVER:
                 placement = place_observer(A, B, C, _poles(st.session_state["u3_poles"]))
             if operation == CANONICAL and canonical is None:
-                raise ValueError("Para obter a forma canônica, escolha a representação G(s) e informe seu numerador/denominador.")
-            st.session_state["u3_result"] = (analysis, placement, canonical, operation)
+                raise ValueError("Para obter a forma canônica, selecione G(s) e informe seu numerador e denominador.")
+            st.session_state["u3_result"] = (analysis, placement, canonical, operation, _signature())
         except (ValueError, ArithmeticError, sp.SympifyError) as exc:
             st.session_state.pop("u3_result", None)
             st.error(f"Não foi possível resolver: {exc}")
 
-    if "u3_result" not in st.session_state:
+    result = st.session_state.get("u3_result")
+    if result is None:
         return
-    analysis, placement, canonical, operation = st.session_state["u3_result"]
+    analysis, placement, canonical, operation, saved_signature = result
+    if saved_signature != _signature():
+        st.info("Os parâmetros foram alterados. Clique em 'Resolver item da U3L1' para atualizar as contas.")
+        return
+
+    mode = _operation_key(operation)
+    # A entrada está confirmada no painel anterior; a resolução não a repete.
+    steps = build_resolution(analysis, placement=placement, canonical=canonical,
+                             operation=mode, include_input=False)
     st.divider()
-    st.subheader("Resolução passo a passo")
-    if canonical is not None:
-        st.markdown("#### Forma canônica controlável — equação (7.12)")
-        _line("G(s)", canonical.original_transfer)
-        _line("A_c", canonical.A)
-        _line("B_c", canonical.B)
-        _line("C_c", canonical.C)
-        _line("D", canonical.D)
-        st.latex(r"G(s)=C_c(sI-A_c)^{-1}B_c+D="+sp.latex(canonical.reconstructed_transfer))
-        st.success("Realização conferida pela função de transferência reconstruída.")
-    if operation == ANALYZE:
-        _show_analysis(analysis)
-    elif operation in (FEEDBACK, OBSERVER):
-        _show_placement(placement, analysis)
-    elif operation == CANONICAL:
-        with st.expander("Verificar também controlabilidade e observabilidade da realização"):
-            _show_analysis(analysis)
-    st.download_button("Baixar resolução (.md)", data=_report(analysis, placement, canonical),
+    st.subheader("Resolução — contas principais")
+    _render_steps(steps)
+
+    if operation == CANONICAL:
+        with st.expander("Opcional: conferir estabilidade, controlabilidade e observabilidade da realização"):
+            extra = build_resolution(analysis, operation="analysis", include_input=False)
+            _render_steps(extra)
+
+    # O download inclui também os dados originais, uma única vez, e as contas da tela.
+    export_steps = build_resolution(analysis, placement=placement, canonical=canonical,
+                                    operation=mode, include_input=True)
+    st.download_button("Baixar resolução completa (.md)",
+                       data=resolution_markdown(export_steps),
                        file_name="resolucao_U3L1.md", mime="text/markdown")
