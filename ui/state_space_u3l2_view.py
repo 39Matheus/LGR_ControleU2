@@ -140,6 +140,7 @@ def _poles(text):
         if not re.fullmatch(r"[\d\s\.,\+\-\*/()ijIJ]+", part):
             raise ValueError(f"Polo inválido: {part!r}")
         expr = part.replace(",", ".").replace("i", "I").replace("j", "I")
+        expr = re.sub(r"(\d|\))I\b", r"\1*I", expr)  # aceita -1+0,1i
         result.append(sp.nsimplify(sp.sympify(expr, locals={"I": sp.I}), rational=True))
     return result
 
