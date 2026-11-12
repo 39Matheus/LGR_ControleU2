@@ -104,3 +104,9 @@ def test_u3l2_pdf_html_and_zip_while_preserving_u3l1():
     existing=solve_u3l1(1)
     assert existing.list_label=='U3L1'
     assert 'U3L1' in build_state_space_html(existing).decode('utf-8')
+
+def test_u3l2_accepts_decimal_comma_imaginary_poles():
+    from ui.state_space_u3l2_view import _poles
+    assert _poles('-1+0,1i; -1-0.1i; -5; -12') == [
+        -1+sp.I/10, -1-sp.I/10, -5, -12,
+    ]
