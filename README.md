@@ -162,3 +162,20 @@ A nova modalidade padrão **Questão completa (recomendado)** tem quatro presets
 Os documentos reproduzem os cálculos essenciais (fórmula, operações intermediárias, resultado, conferência), seguindo o capítulo 7 da apostila: **u=Kx => A+BK**, observador **A−LC**. As matrizes da entrada são exibidas uma só vez por sistema. Cada questão pode ser exportada para **PDF** ou **HTML** com MathJax; é possível também preparar um **ZIP com 4 PDFs e 4 HTMLs**. O modo **Item individual (editável)** preserva campos de matrizes, função de transferência, polos e seleção da operação, com exportação PDF/HTML específica. O PDF usa ReportLab e renderização matemática local, sem depender de serviços remotos nem LaTeX instalado no servidor; o HTML usa MathJax via CDN para fórmulas.
 
 Execute `pytest -q tests/test_state_space_questions.py` para os testes de agrupamento, relatórios e ZIP.
+
+## Unidade 3 — Lista 2: seguidores de referência (degrau)
+
+A **U3L1 permanece integralmente disponível** no menu inicial. A nova opção **Unidade 3 — Lista 2** resolve as quatro questões da lista com a metodologia da apostila, seção 7.10.
+
+- **Q1**: realização canônica controlável de `G(s)=(3s²+4s−2)/(s³+3s²+7s+5)` e seguidor de degrau com polos `−1±0,1i`, `−5`, `−12`.
+- **Q2**: projeto no sistema `A=[[-6,1,0],[-11,0,1],[-6,0,0]]`, `B=[2,6,2]ᵀ`, `C=[1,0,0]`, com os mesmos quatro polos.
+- **Q3**: realização canônica controlável de `G(s)=(2s+1)/(s(s+3))` e seguidor com os **três** polos `−1,−1,−1`.
+- **Q4**: realização canônica **observável** de `G(s)=3/(s²+2s−4)` e seguidor com polos `−2,−2,−3`.
+
+**Convenções idênticas à apostila** (eqs. 7.23–7.27): `e=y−r`, `z=dx/dt`, `w=du/dt`; matrizes aumentadas `A_a=[[0,C],[0,A]]`, `B_a=[[0],[B]]`; vetor de ganhos `K_a=−[0 ... 1]U_a⁻¹ q(A_a)=[k1,k2]`; controle `u(t)=k1∫(y−r)dt+k2x`; sistema fechado `[[A+Bk2,Bk1],[C,0]]`. O módulo verifica posto da controlabilidade aumentada, polos exatos e ganho estacionário unitário em degrau.
+
+Cada um dos **4 presets de questão completa** apresenta dados uma única vez, forma canônica (quando solicitada), construção do sistema aumentado, produtos que formam a controlabilidade, polinômio desejado, `q(A_a)`, inversa, ganho, lei de controle e verificação. Os passos são idênticos na tela, PDF e HTML. O modo **Item individual (editável)** permite alterar os coeficientes da FT, matrizes e polos; gera PDF e HTML específicos. O pacote `.zip` contém exatamente **4 PDFs + 4 HTMLs**, nomeados `U3L2_Questao_1` a `U3L2_Questao_4`.
+
+O motor PDF/HTML da U3L1 foi generalizado apenas para ler `list_label`, com padrão `U3L1`, de forma que os relatórios antigos e o ZIP antigo continuam com os nomes e conteúdos da U3L1.
+
+Teste: `pytest -q tests/test_state_space_u3l2.py` ou `pytest -q` para a suíte completa.
