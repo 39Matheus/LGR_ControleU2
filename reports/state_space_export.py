@@ -41,6 +41,8 @@ def _iter_steps(document):
 
 def build_state_space_html(document):
     """HTML autônomo quanto ao texto; MathJax via CDN para fórmulas visualmente completas."""
+    label = getattr(document, "list_label", "U3L1")
+    list_name = "Lista 2" if label == "U3L2" else "Lista 1"
     parts = [
         '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width,initial-scale=1">',
@@ -50,7 +52,7 @@ def build_state_space_html(document):
         '<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>',
         '</head><body><header><small>Projeto de Sistemas de Controle · UFRN · 2026.2</small>',
         '<h1>' + escape(document.title) + '</h1>',
-        '<p class="note">Unidade 3, Lista 1 · Método da apostila, capítulo 7 · ',
+        '<p class="note">Unidade 3, ' + list_name + ' · Método da apostila, capítulo 7 · ',
         'Realimentação u(t)=Kx(t), A+BK; observador A−LC.</p></header>',
     ]
     for section_title, steps in _iter_steps(document):
@@ -66,7 +68,7 @@ def build_state_space_html(document):
                 css = step.kind if step.kind in ('note','success','warning') else 'note'
                 parts.append(f'<p class="{css}">{escape(step.value)}</p>')
         parts.append('</section>')
-    parts.append('<footer>Relatório gerado pela Calculadora de Controle · U3L1 · ',)
+    parts.append('<footer>Relatório gerado pela Calculadora de Controle · ' + label + ' · ',)
     parts.append('Equações verificadas simbolicamente com SymPy.</footer></body></html>')
     return ''.join(parts).encode('utf-8')
 
@@ -194,17 +196,18 @@ def _matrix_flowables(tex, math_style, mono_font):
         output.append(Paragraph(escape(trailing),math_style))
     return output
 
-def _page_number(canvas, doc):
+def _page_number(canvas, doc, label='U3L1'):
     canvas.saveState()
     canvas.setFont('Helvetica', 8)
     canvas.setFillColor(colors.HexColor('#5d7089'))
-    canvas.drawString(1.7*cm, 1.0*cm, 'UFRN · Projeto de Sistemas de Controle · U3L1')
+    canvas.drawString(1.7*cm, 1.0*cm, 'UFRN · Projeto de Sistemas de Controle · '+label)
     canvas.drawRightString(A4[0]-1.7*cm, 1.0*cm, f'{doc.page}')
     canvas.restoreState()
 
 
 def build_state_space_pdf(document):
     """PDF multipágina com todas as contas e dados, sem dependências de LaTeX."""
+    label = getattr(document, "list_label", "U3L1")
     sans, mono = _font_names()
     base = getSampleStyleSheet()
     styles = {
@@ -226,7 +229,7 @@ def build_state_space_pdf(document):
     doc = SimpleDocTemplate(buffer,pagesize=A4,
                              leftMargin=1.7*cm,rightMargin=1.7*cm,
                              topMargin=1.7*cm,bottomMargin=1.7*cm,
-                             title=document.title,author='Calculadora de Controle U3L1')
+                             title=document.title,author='Calculadora de Controle '+label)
     story=[Paragraph(escape(document.title),styles['title']),
            Paragraph('UFRN · Projeto de Sistemas de Controle · 2026.2',styles['foot']),
            Paragraph('Apostila, capítulo 7. Convenção: u(t)=Kx(t) ⇒ A+BK; observador A-LC.',styles['body'])]
@@ -249,7 +252,8 @@ def build_state_space_pdf(document):
                         story.append(Paragraph(escape(_group_to_plain(step.value)),styles['math']))
             else:
                 story.append(Paragraph(escape(step.value),styles['body']))
-    doc.build(story,onFirstPage=_page_number,onLaterPages=_page_number)
+    footer=lambda canvas, page: _page_number(canvas, page, label)
+    doc.build(story,onFirstPage=footer,onLaterPages=footer)
     return buffer.getvalue()
 
 
@@ -259,7 +263,7 @@ def build_all_state_space_zip(solve_fn):
     with ZipFile(buffer,'w',compression=ZIP_DEFLATED) as zipfile:
         for number in range(1,5):
             document=solve_fn(number)
-            name=f'U3L1_Questao_{number}'
+            name=f'{getattr(document, "list_label", "U3L1")}_Questao_{number}'
             zipfile.writestr(name+'.pdf',build_state_space_pdf(document))
             zipfile.writestr(name+'.html',build_state_space_html(document))
     return buffer.getvalue()

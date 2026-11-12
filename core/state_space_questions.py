@@ -33,6 +33,7 @@ class QuestionDocument:
     title: str
     sections: Tuple[QuestionSection, ...]
     number: int = 0
+    list_label: str = "U3L1"
 
 
 def _section(title, steps):
